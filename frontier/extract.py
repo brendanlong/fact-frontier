@@ -41,7 +41,10 @@ that are merely "standard" in the field.
 work, and its main results.
 
 What makes a good fact:
-- Atomic: one idea, which one short question could test. Split compound statements.
+- Atomic: one claim, which one short question could test — usually a single sentence of under \
+about 35 words. A fact with several sentences, or with "and"/"also" joining independent claims, \
+is several facts: split it, and link the pieces with prerequisites where one builds on another. \
+A definition plus its properties is a definition fact and separate property facts.
 - Standalone: readable months later with no paper at hand. Never write "this paper", "the \
 authors", "our method", or undefined symbols. Name things ("EK-FAC", "the PBRF") and attribute \
 results ("Grosse et al. (2023) found ...").
@@ -55,7 +58,7 @@ Prerequisites between facts: list a fact's prerequisites when understanding it g
 requires them, using keys from this same response. Only direct dependencies; the graph \
 supplies the transitive ones. No cycles.
 
-Size: a typical paper yields 25-60 facts; a long one may need more. Cover what matters for \
+Size: a typical paper yields 40-80 facts; a long one may need more. Cover what matters for \
 understanding rather than paraphrasing every paragraph.
 """
 
