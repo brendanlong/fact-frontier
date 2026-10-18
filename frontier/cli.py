@@ -4,7 +4,7 @@ import sys
 import time
 from pathlib import Path
 
-from frontier import cluster, merge, report, sources
+from frontier import cluster, merge, report, review, sources
 from frontier.db import connect
 from frontier.extract import extract
 from frontier.llm import LLM
@@ -24,19 +24,27 @@ def ingest(args: argparse.Namespace) -> None:
         text = sources.pdf_text(pdf)
         try:
             extraction = extract(llm, profile, text)
-            print(f"{ref}: {len(extraction.facts)} candidates; merging into pool...", flush=True)
+            print(f"{ref}: reviewing {len(extraction.facts)} candidates...", flush=True)
+            verdicts = review.review(
+                llm, llm.models.review, extraction.title, text, extraction.facts
+            )
+            extracted = len(extraction.facts)
+            extraction.facts = review.apply(extraction.facts, verdicts)
+            print(f"{ref}: {len(extraction.facts)} facts; merging into pool...", flush=True)
             source_id = conn.execute(
                 "INSERT INTO sources (ref, title, text) VALUES (?, ?, ?)",
                 (ref, extraction.title, text),
             ).lastrowid
             assert source_id is not None
             stats = merge.add_candidates(conn, llm, source_id, extraction)
+            stats.extracted = extracted
             print(f"{ref}: reclustering...", flush=True)
             cluster.recluster(conn, llm, args.resolution)
             conn.execute(
-                "INSERT INTO ingests VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO ingests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     source_id,
+                    stats.extracted,
                     stats.candidates,
                     stats.new,
                     stats.duplicates,

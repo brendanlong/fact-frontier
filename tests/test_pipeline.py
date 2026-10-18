@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from frontier import cluster, merge
+from frontier import cluster, merge, review
 from frontier.db import connect
 from frontier.extract import Candidate, Extraction, Role, drop_dangling
 from frontier.llm import Models, strict_schema
@@ -215,3 +215,41 @@ def test_strict_schema_requires_every_property_and_keeps_title_fields():
     candidate = schema["$defs"]["Candidate"]
     assert candidate["additionalProperties"] is False
     assert set(candidate["required"]) == set(Candidate.model_fields)
+
+
+def verdict(key, kind, *statements):
+    return review.Verdict(
+        key=key,
+        verdict=kind,
+        problems=[],
+        replacements=[review.Replacement(statement=s, kind="property") for s in statements],
+        reason="",
+    )
+
+
+def test_review_split_pieces_inherit_links_both_ways():
+    cands = [cand("a", "base"), cand("b", "x and y", ["a"]), cand("c", "uses b", ["b"])]
+    out = review.apply(cands, {"b": verdict("b", "split", "x", "y")})
+    by_key = {c.key: c for c in out}
+    assert [c.key for c in out] == ["a", "b.0", "b.1", "c"]
+    assert by_key["b.0"].prerequisites == ["a"] and by_key["b.1"].prerequisites == ["a"]
+    assert by_key["c"].prerequisites == ["b.0", "b.1"]
+    assert by_key["b.1"].statement == "y"
+
+
+def test_review_drop_passes_prerequisites_through():
+    cands = [cand("a", "base"), cand("b", "trivia", ["a"]), cand("c", "uses b", ["b"])]
+    out = review.apply(cands, {"b": verdict("b", "drop", "ignored")})
+    assert [c.key for c in out] == ["a", "c"]
+    assert out[1].prerequisites == ["a"]
+
+
+def test_review_rewrite_keeps_key_and_missing_verdict_keeps_fact():
+    out = review.apply(
+        [cand("a", "θs is good"), cand("b", "fine")],
+        {"a": verdict("a", "rewrite", "The trained parameters are good")},
+    )
+    assert [(c.key, c.statement) for c in out] == [
+        ("a", "The trained parameters are good"),
+        ("b", "fine"),
+    ]

@@ -14,6 +14,9 @@ Effort = Literal["low", "medium", "high"]
 @dataclass(frozen=True)
 class Models:
     extract: str = "anthropic/claude-sonnet-5.5"
+    # Haiku 5.5 splits compound facts well but drops a paper's central ideas as "paper
+    # details" (scripts/compare_review.py), so the review needs Sonnet's judgment.
+    review: str = "anthropic/claude-sonnet-5.5"
     merge: str = "anthropic/claude-sonnet-5.5"
     name_clusters: str = "anthropic/claude-haiku-5.5"
     embed: str = "voyageai/voyage-4"

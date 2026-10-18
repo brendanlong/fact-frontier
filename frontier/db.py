@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS fact_clusters (
 
 CREATE TABLE IF NOT EXISTS ingests (
     source_id INTEGER PRIMARY KEY REFERENCES sources(id),
+    -- Facts as extracted, then as they reached the merge after review split and dropped some.
+    extracted INTEGER NOT NULL,
     candidates INTEGER NOT NULL,
     new INTEGER NOT NULL,
     duplicates INTEGER NOT NULL,

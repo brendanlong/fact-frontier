@@ -93,14 +93,15 @@ def render(conn: sqlite3.Connection, title: str) -> str:
 
     out.append(
         "<h2>Sources, in ingest order</h2><table><tr><th></th><th>Source</th>"
-        "<th>Candidates</th><th>New</th><th>Merged</th><th>Links</th><th>Cost</th></tr>"
+        "<th>Extracted</th><th>Reviewed</th><th>New</th><th>Merged</th><th>Links</th><th>Cost</th></tr>"
     )
     for r in conn.execute("SELECT * FROM ingests ORDER BY source_id"):
         s = sources[r["source_id"]]
         out.append(
             f"<tr><td>{short[s['id']]}</td><td>{escape(s['title'] or s['ref'])}<br>"
             f'<span class="muted">{escape(s["ref"])}</span></td>'
-            f'<td class="num">{r["candidates"]}</td><td class="num">{r["new"]}</td>'
+            f'<td class="num">{r["extracted"]}</td><td class="num">{r["candidates"]}</td>'
+            f'<td class="num">{r["new"]}</td>'
             f'<td class="num">{r["duplicates"]}</td><td class="num">{r["edges"]}</td>'
             f'<td class="num">${r["cost"]:.2f}</td></tr>'
         )

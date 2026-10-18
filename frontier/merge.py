@@ -105,6 +105,7 @@ def judge(llm: LLM, batch: list[tuple[Candidate, list[PoolFact]]]) -> dict[str, 
 
 @dataclass
 class IngestStats:
+    extracted: int = 0
     candidates: int = 0
     new: int = 0
     duplicates: int = 0
