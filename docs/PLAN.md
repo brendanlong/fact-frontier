@@ -420,9 +420,9 @@ from use. Blind judges to which system produced the output. Pin model and prompt
   combined candidate list from the new extractor and the reading-guide baseline, shown blind
   and in random order. This reuses the devil's advocate's 37 graded facts as seed labels.
 - **Stuck points from his natural reading** in the companion.
-- **2 familiar papers** annotated as capability-level gold entries (Phase 0, ~20 min each),
-  using the format in the AI-systems review's Appendix B. To save his time, a model drafts the
-  entries and he corrects them. This is the small, locked acceptance set.
+- **The acceptance papers** (§9): a model drafts capability-level requirements, using the
+  format in the AI-systems review's Appendix B, and he labels each *know it / partly / don't
+  know / not needed*, plus anything missing. About 15–20 minutes per paper.
 - **Disputes and "bad question" clicks.** These are biased toward visible errors, so they are
   supplemented by a recurring random audit of *accepted* outputs, which catches confident
   errors that every judge agreed on.
@@ -431,7 +431,7 @@ from use. Blind judges to which system produced the output. Pin model and prompt
 
 | Phase | Owner time |
 |---|---|
-| Phase 0 | ~1 h: gold for 2 familiar papers (~40 min), exam validation (~20 min) |
+| Phase 0 | ~1–1.5 h: labelling the drafted requirements for 3 acceptance papers, exam validation on Paulo et al. (~20 min) |
 | Phase 1a | ~45 min triage of the four ingested papers, plus the first live paper |
 | Each live paper, early phases | ~30–45 min beyond reading: pre-test, two short free-writes, post-test, diagnosis. Shrinks once measurement stabilizes |
 | Audits | ~15 min a week |
@@ -439,8 +439,9 @@ from use. Blind judges to which system produced the output. Pin model and prompt
 Every label request is counted against these budgets.
 
 **Datasets:** split by paper before any tuning.
-- **Dev:** the four ingested papers.
-- **Locked acceptance:** the 2 gold familiar papers, plus 2 canary papers.
+- **Dev:** Bae, Soligo and Der (already ingested).
+- **Locked acceptance:** the three papers the owner understands overall (§9), plus 2 canary
+  papers.
 - **Prospective:** every live paper. Source,
 parser, registry and learner snapshots are frozen for comparisons, so a warm concept store
 doesn't advantage only the new system.
@@ -515,7 +516,8 @@ provisional smoke tests, reported with uncertainty.
   - the one-shot reading-guide baseline, plus a normalizer that turns the guide into
     requirement records so both systems are scored the same way;
   - the exam generator.
-- Owner: correct model-drafted gold for 2 familiar papers, and validate their sealed exams.
+- Owner: label model-drafted requirements for the three acceptance papers, and validate the
+  sealed exam for Paulo et al.
 - Decision: the gold, the guide baseline and the canaries can be scored from saved artifacts,
   and every match is inspectable.
 - **Fallback:** if the matcher can't be validated, score by owner review of the match tables
@@ -529,7 +531,7 @@ provisional smoke tests, reported with uncertainty.
     self-explanation prompts at core equations, stuck / already-knew / bad buttons, event log;
   - a minimal web UI with no learner model yet: FastAPI + SQLite, like the owner's
     chess-pretraining-for-humans repo, but with a component-based frontend.
-- Owner: the next paper he wants to read anyway. Sealed pre-test and free-write first, then
+- Owner: Grosse et al. 2023 (§9). Sealed pre-test and free-write first, then
   read with the companion, then the post-test.
 - Decision:
   - On the acceptance papers and stuck points, does the requirements engine beat the one-shot
@@ -587,17 +589,37 @@ models fitted on the log.
 `encompasses` memory credit, learned item difficulty, graph visualisation, and the
 domain-plugin framework.
 
-## 9. Decisions for the owner
+## 9. Owner decisions (2026-10-19)
 
-1. **Next paper:** which paper does he want to read next? It becomes the first live test in
-   Phase 1a.
-2. **Two or three familiar papers** for the locked acceptance set and exam validation.
-3. **Cross-family roles:** use GPT and Gemini via OpenRouter as judges and graders for Claude
-   output, and vice versa. Recommended.
-4. **Privacy:** may unpublished drafts or private code be sent to these providers when he adds
-   his own work to the profile?
-5. **Rework in place:** keep the repo and infrastructure, and treat the old pool as read-only
-   legacy. Recommended.
+1. **First live paper: Grosse et al. 2023** (influence functions for LLMs). He understands what
+   it does and why, but doesn't follow the maths. That makes it a good test of depth: the
+   requirements must reach "follow the derivation" for the influence-function machinery
+   (implicit function theorem, Gauss-Newton, damping, K-FAC/EK-FAC, PBRF). Bae et al. 2022 is a
+   likely "read this first" recommendation. Grosse moves out of the dev set.
+2. **Acceptance papers:** the owner doesn't know any paper exhaustively, so gold entries can't
+   assume "everything in it is known". Instead, for papers he understands overall, a model
+   drafts the requirements and he labels each one: *know it / partly / don't know / not
+   needed*, plus anything missing. That gives requirement relevance and learner-gap labels
+   together. Papers:
+   - Paulo et al. 2026, *The Unequal Influence of Bad Advice* (understands it fairly well;
+     also used for exam validation);
+   - Goldowsky-Dill et al. 2025, *Detecting Strategic Deception Using Linear Probes*;
+   - Cammarata 2026, *Neural Networks Are Already Clean* (Goodfire essay).
+3. **Cross-family models are fine to use; privacy is not a concern.**
+4. **Judges must not be trusted by default.** The owner has seen Gemini, used as a code
+   reviewer, be wrong or demand the wrong level of detail. Policy:
+   - A judge **advises** until it is calibrated. It gains gating authority only on criteria
+     where it agrees with owner labels *and* rarely rejects owner-approved clean controls.
+     Over-strictness is measured as directly as leniency.
+   - The judge always receives the **target objective and depth** and the brevity budget, and
+     must judge against those, not its own preferred level of detail. "Needs more detail" is
+     only a defect if the objective requires that detail.
+   - Each finding must cite the specific evidence or rubric criterion it rests on.
+     Unsupported findings are discarded.
+   - Roles go to whichever model calibrates best, measured per role. No model family is
+     assumed reliable; Gemini starts only as a tie-breaker.
+   - The owner can override any judgment, and every override becomes a calibration label.
+5. **Rework in place** on the existing repo.
 
 ## Appendix: the Phase 0/1a build contract
 
