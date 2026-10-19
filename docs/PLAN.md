@@ -1,484 +1,643 @@
 # Plan: deciding what to teach, and getting it right
 
-Status: draft for review, 2026-10-19. Inputs: the problem brief and the twelve research reports in
-[`research/`](research/). Five independent expert opinions, a devil's advocate on the current
+Status: v2, 2026-10-19, revised after three reviews: [teaching](research/review-teaching.md),
+[AI systems](research/review-ai-systems.md) and [pragmatist](research/review-pragmatist.md).
+Inputs: the [problem brief](research/brief.md) and the research reports in
+[`research/`](research/): five independent expert opinions, a devil's-advocate audit of the
 prototype, and literature on learning science, AI methods and existing products.
 
 ## 0. Summary
 
-The research agrees on a lot, and it changes the design substantially:
+1. **Track typed concepts with operational objectives, not atomic facts.**
+   - The prototype's single-claim facts made dedup easier but taught badly. Of 37 facts the
+     devil's advocate graded, 11 weren't worth this learner's time and 3 were wrong.
+   - Most extracted facts were paper results that would be drilled as trivia. Each paper's
+     argument was scattered across sentences that are never read together.
+   - Claims now become *assertions* that seed questions, not units of mastery.
+2. **The paper is the spine.**
+   - Order: pose the problem → a map of the whole paper (blurry) → just-in-time teaching of
+     the gaps that block each section → guided reading of the paper itself (sharp) →
+     reconstructing and critiquing its argument.
+   - This resolves blurry-to-sharp vs. prerequisite-first: blurry at the macro level,
+     prerequisite-gated at the micro level.
+3. **Diagnose before teaching.** Over-teaching an expert is a top-ranked risk in every expert
+   report: first for two, closely related to the first for the others.
+   Probe a few central concepts, infer conservatively and expand deeper only where he fails.
+4. **Models judge, code decides.**
+   - Models make small, local, evidence-backed judgments. Code owns learner state, ordering,
+     scheduling and every quality gate.
+   - All of it sits on an append-only evidence log where corrections are new events, never
+     edits. A model never writes "user knows X".
+5. **Unknowns are detected from behaviour, not self-report.**
+   - Signals: where a concept comes from, whether it collides with an older meaning, and
+     whether each claim is grounded.
+   - Missing grounding blocks generation; it is not papered over. This applies to "standard"
+     background too: the prototype's wrong facts were all standard maths.
+6. **Item quality, feedback and grading are as risky as choosing what to teach.** Even the best
+   model writes unusable memory prompts about a third of the time (Memory Machines). Grading
+   drifts lenient. Feedback after an error is the active ingredient, not the score.
+7. **Measure honestly from day one, but don't wait to be useful.**
+   - Measurement: a sealed exam per paper, written from the paper alone; a semantic matcher
+     for requirement recall; canaries; owner labels collected as a by-product of use.
+   - The owner uses the first version on a real paper within about a week.
+   - Gates are decision points with fallbacks decided in advance, not walls.
 
-1. **The unit is a typed concept with depth levels, not an atomic fact.** The prototype's
-   single-claim facts made dedup easier but taught badly. In the current pool, roughly a third of
-   graded facts were not worth this learner's time and 3 of 37 were wrong. Most are paper results that would be
-   drilled as trivia, and the argument of each paper is scattered across sentences no one
-   reads together. Claims become *question seeds attached to concepts*, not units of mastery.
-   (devil's advocate; KLI framework; Math Academy topics; KCGen-KT)
-2. **The paper is the spine.** First a map of the whole paper (blurry), then just-in-time
-   teaching of the gaps that block each section, then guided reading of the paper itself
-   (sharp). Every expert independently put a reading companion at the center, not a
-   standalone prerequisite course. This settles blurry-to-sharp vs. prerequisite-first:
-   blurry at the macro level, prerequisite-gated at the micro level.
-3. **Diagnose before teaching.** For an expert learner, the biggest waste and the most likely
-   reason he quits is teaching what he already knows. Probe top-down from the concepts nearest
-   the paper and infer downward. Expand deeper only where he fails. Every expert ranked this
-   first or second.
-4. **Models judge, code decides.** Models make small, local, evidence-backed judgments. Code
-   owns the learner state, the ordering, the scheduling and every quality gate, all built on an
-   append-only evidence log. A model never writes "user knows X".
-5. **Unknowns are detected from behaviour, not self-report.** Use provenance classes
-   (standard / introduced here / from a citation / unknown), cutoff-date signals, and a
-   closed-book vs. paper-grounded definition comparison. LLMs define over 86% of made-up terms
-   when asked (PhantomBench), so asking them whether they know a term doesn't work.
-6. **Item quality and grading are as risky as choosing what to teach.** Even the best model
-   writes unusable flashcards about a third of the time (Memory Machines). Grading drifts
-   lenient. Use spec-based generation, independent solving, leak checks, key-point rubrics
-   and cross-family judges, and log every dispute.
-7. **Measure from day one.** Frozen comprehension questions per paper, an owner-annotated gold
-   set, canary papers with invented methods, and within-subject holdouts. The honest
-   baseline is "read the paper while chatting with Claude", not "no tool".
-
-The owner was right that the app shell is easy. The experts add one correction: the reading
-companion and the feedback buttons are not shell. They are how we find out whether any of the
-AI works.
+The owner was right that the app shell is easy, with one correction from every reviewer. The
+reading companion and the feedback buttons are not shell: they are where the labels come from,
+and without them no part of the AI can be evaluated.
 
 ## 1. Goal and how success is measured
 
-**Goal:** minimise learner time to understand a target (first: a paper) at the depth the
-learner needs, and keep the reusable parts.
+**Goal:** minimise the learner's time to understand a target (first: a paper) at the depth he
+needs, and keep the reusable parts.
 
-**North-star metric:** understanding per learner-minute. Understanding is measured by a
-**frozen target exam** per paper: 10–15 questions an expert colleague would ask after a reading
-group (what problem, why the method works, what would break it, when to use it instead of X,
-how to apply it to your project). It is written by a separate model call that never sees the
-teaching plan, and it is never used in teaching. Ask a few questions before teaching, all of
-them after, and again 2–4 weeks later.
+**Outcome measures:**
 
-**The bar to beat:** reading the paper with a Claude chat open. If the tool doesn't clearly
-beat that on time or exam score, its value has to come from compounding across papers. Test
-that directly: the second and third papers in an area should get cheaper.
+- **Sealed exam per paper.**
+  - Written *from the paper text alone*: no teaching map, no practice items, and a different model
+    family from the one that writes the map and explanations.
+  - About 10–15 questions an expert colleague would ask after a reading group: what problem,
+    why the method works, what would break it, when to use it instead of X, how to apply it to
+    your project.
+  - Keys, rubric and pass rule are frozen with it, along with the test conditions (closed
+    book, or source open, and that condition is logged).
+  - Validated by the owner on papers he already knows before it is trusted.
+  - Pretesting is itself an intervention, so the pre-test uses a separate small subset. The
+    delayed test (2–4 weeks) uses *unseen, matched transfer* questions. Exposed questions are
+    reported separately.
+- **Before/after free-write** (the research mentor's test, ~10 min): a 3-sentence summary, the
+  main claim and its evidence, the biggest weakness, and one extension with a predicted
+  outcome. Compare with a reference: OpenReview reviews, a later critique, or a strong model
+  given paper plus reviews.
+- **Time to competence**, counting all of the learner's minutes, including triage, tests and
+  disputes.
+- **Compounding:** later papers in an area need fewer lessons per unit of exam score.
+
+**The bar to beat:** reading the paper with a Claude chat open. Phase 1–3 runs are usability and
+feasibility pilots, not proof of superiority. Comparative claims need the block design in §6.
 
 ## 2. Where best practice overrides the brief
 
 | Brief said | Change | Why |
 |---|---|---|
-| Order by generality, foundations first | Order by **goal need × P(gap) × unlock value**. Generality decides what to *retain*, not what to teach first | For an expert, foundations are exactly what he knows. Every expert and the literature agree (expertise reversal; ITS fringe teaching) |
-| Effort level chosen on demand | User picks **time budget and context**. System picks the activity, and explains its pick. User can override | Learners reliably choose the least effective strategies (Karpicke 2009; Kornell & Bjork 2008) |
-| No-effort tier (read/listen) as a learning level | Keep it, but it is **exposure, never evidence or review** | Restudy doesn't maintain memory. Retrieval does (g≈0.6) |
-| Keep knowledge over time | **Value-weighted retention.** Maintain reusable concepts; let paper-local detail decay; keep each paper's one-line claim and key figure | Review debt is the main reason people quit spaced repetition, and relearning a detail later is cheap |
-| Varied recall | Keep, with controls: vary *within* a declared depth level, keep one stable anchor item per concept, schedule per concept | Unconstrained variation breaks the memory model and grading |
-| Flag what the model doesn't know | Keep, but detect it **structurally** (§4.6) | Self-reported confidence is poorly calibrated, and consistent misconceptions survive self-consistency checks |
-| ADEPT for explanations | Use as a checklist, not a template. The **example the learner works through** is mandatory. Analogies must state where they break. For concepts near his expertise, lead with the problem or the technical statement | Only the worked example is an active ingredient. Analogies for experts can be redundant (expertise reversal) |
+| Order by generality, foundations first | Order by **goal need × P(gap) × unlock value**. Generality decides what to *retain*, not what to teach first | For an expert, foundations are what he knows (expertise reversal; teaching at the "fringe" in ITS) |
+| Effort level chosen on demand | User picks **time budget and context**. System recommends the activity and says why. User can override | Learners reliably pick the least effective strategy (Karpicke 2009; Kornell & Bjork 2008) |
+| No-effort tier (read/listen) | Keep it as **exposure, never as evidence or review** | Retrieval practice beats restudy for retention (g≈0.6) |
+| Keep knowledge over time | **Value-weighted retention.** Maintain reusable concepts and each paper's one-line claim and key figure. Let paper-local detail decay | Review debt is a widely reported reason SRS users quit (anecdotal; no public quit statistics), and relearning is cheap |
+| Varied recall | Keep, with controls: vary *within* an objective, keep one stable anchor item per objective for scheduling | Unconstrained variation breaks the memory model and grading |
+| Flag what the model doesn't know | Keep, but detect it **structurally** (§4.6), and require grounding for central claims even when "standard" | Self-reported confidence is poorly calibrated. The prototype's errors were in standard maths |
+| ADEPT for explanations | Use as a checklist. The **example the learner works through** is mandatory. Analogies state where they break. Near his expertise, lead with the problem or the technical statement | Only the worked example is an active ingredient. Analogies can slow experts |
 
-## 3. What we keep from the prototype
+## 3. What happens to the prototype
 
-Keep: the OpenRouter client with per-call cost logging; paper loading; profile-conditioned
-extraction from the full paper; the "read it without the paper" review test (adding a truth
-check); embedding + keyword candidate retrieval then a model decision for dedup; provenance
-per source with merge logs; derived clusters that never touch history; side-by-side model
-comparison scripts.
+**Keep:** the OpenRouter client and cost logging; paper loading; profile-conditioned extraction
+from the full paper; the "read it without the paper" test (plus grounding); embedding + keyword
+retrieval followed by a model decision for dedup; per-source provenance and merge logs;
+side-by-side model comparison.
 
-Replace: atomic facts as the tracked unit; untyped "prerequisite" edges, which currently mix
-about five relations; per-fact mastery; clusters as the map of knowledge.
+**Retire:** atomic facts as the tracked unit; untyped "prerequisite" edges; per-fact mastery;
+clusters as the knowledge map.
 
-Known bugs the devil's advocate found, which go away with the redesign:
-- Split facts inherit all of the parent's prerequisites, giving 13 sibling groups the same
-  wrong edges.
-- 14% of edges are transitive.
-- Some edges are reversed.
-- The pool states some things in contradictory ways.
-- There are no cross-paper links between the misalignment and SAE papers. The wiki wrongly
-  said there were; that is being corrected.
+**The current pool:** read-only legacy input. Useful facts can be imported as *unverified
+assertions* with legacy IDs. Old edges and background claims must not be promoted to trusted
+status.
+
+**Known prototype issues to fix:**
+- Missing model judgments default to "keep" or "new"; they must fail closed.
+- Logging commits on the same connection as graph mutations.
+- The merge step doesn't dedupe within a new batch.
+- Split facts inherited all parent edges.
+- There are no cross-paper links between the misalignment and SAE papers. The wiki was
+  corrected.
 
 ## 4. Design
 
-### 4.1 The core model (shared across domains)
+### 4.1 Core model (shared across domains)
 
-```
-Goal ──needs──▶ Requirement ──on──▶ Concept ◀──tests── Item ──▶ Evidence (append-only)
- (paper,          (depth, centrality,  (typed, global or     (spec-based,    (response, grade,
-  project, show)   claim/passage it     paper-local, depth    many per         rationale, latency,
-                   serves, status)      levels, provenance)   concept)         predictions)
-                                          │
-                                          └─ typed edges: requires · encompasses(w) · contrasts ·
-                                             refines · confusable_with · homonym_of
-```
+The reviewers found that "concept", "depth", "facet" and "item" were conflated. They are
+separated as follows:
 
-- **Concept**, called a knowledge component (KC) in the learning-science literature. Its
-  operational definition: you can write ≥3 distinct questions that test it independently, and
-  for this learner it takes one 5–15 minute lesson to teach. Types: `term`, `concept/mechanism`,
-  `procedure`, `contrast` (choose between methods, a first-class unit), `claim/result`
-  (usually paper-local), `misconception`. It has **depth levels**: recognize → explain → apply →
-  extend. Each concept carries a grounded definition at each level, aliases, a provenance class
-  and source spans. The prototype's "informal vs. formal PBRF" near-duplicate becomes two depth
-  levels of one concept.
-- **Requirement** links a goal to a concept: the depth needed, centrality (core contribution /
-  method / experimental setup / passing mention), the claims or passages it serves, and a
-  disposition. Dispositions are *teach* (needed and reusable), *gloss* (explain inline while
-  reading, don't maintain) or *ignore* (peripheral). This three-way split comes from the
-  language-learning expert and fits papers well.
-- **Item** is generated from a spec: concept, depth, type (recall / explain why / apply to a
-  new scenario / choose between / predict what happens if / diagnose / derive / implement),
-  answer-length budget, and the misconception it targets. It has 1–4 gradable key points. Items
-  are separate from concepts, so one concept has many items, and one item can touch a primary
-  concept plus at most two secondary ones.
-- **Evidence** is an append-only log. Each row records: item and version; concept tags at that
-  time; graph version; the model's predicted P(correct) logged before the answer; the raw
-  answer; latency; grade per key point; grader model and prompt version; rationale; diagnosed
-  concept; and any user override.
-  - Learner state is derived from the log by replaying it against the current graph, so
-    restructuring re-attributes old evidence instead of corrupting it.
-  - Concepts have stable IDs and are never deleted, only merged (alias), split (re-tag) or
-    deprecated.
-- **Learner state per (concept, facet)**: *acquisition*, an Elo-style ability (has he ever
-  understood it?), and *memory*, FSRS stability and retrievability (can he recall it now?).
-  Facets are declared per domain: explain / apply / choose for ML; read / listen / speak / write
-  for language. Evidence weights depend on the activity:
+| Entity | What it is |
+|---|---|
+| **Concept** (with revisions) | A stable meaning and scope ("the PBRF", "LoRA", "emergent misalignment as Betley et al. define it"). Has a type, aliases and a definition grounded in assertions. Stable ID; never deleted, only merged, split or deprecated through explicit events |
+| **Objective** | A concept × an operational capability (recognize / explain / apply / choose-between / critique / extend), plus an optional domain facet and conditions, each with a success criterion. Levels are *not* assumed to form a universal ladder; any implication between levels is explicit and conservative |
+| **Requirement** | A goal's need for an objective. Records the spans and claims it serves, necessity, centrality, review status and the extraction candidates it came from. Kept separate: learner gap, current delivery mode (teach / gloss / ignore, chosen after diagnosis) and retention policy |
+| **Assertion** | A claim with a kind: `paper_claim`, `reported_observation`, `derivation`, `external_background` or `hypothesis`. Carries assumptions and evidence links of a stated relation: quoted, paraphrased, derived, illustrative, analogy. The prototype's "facts" survive here, as seeds |
+| **Item version** | An immutable assessment: stem, allowed resources, response modality, answer budget, a versioned rubric of 1–4 key points each tagged to objectives, misconception rules, the assertions it is grounded in, and validation artifacts |
+| **Event** | Append-only. Attempts, grades, disputes, triage clicks, stuck points, exposures, graph changes. Corrections and re-attributions are *new* events that supersede old ones |
 
-  | Activity | Evidence weight |
-  |---|---|
-  | Read or listen | Exposure only, zero weight |
-  | Self-graded card | Low |
-  | Graded short answer | Normal |
-  | Application, contrast or reading-comprehension item | High |
-  | Code-verified homework | Highest |
+**Concept types:** term, mechanism, procedure, contrast (choosing between methods, a first-class
+type), claim, misconception, and **argument**. An argument is a paper's chain of problem →
+idea → method → evidence → conclusion, practised as a whole.
 
-- **Credit and blame** (Math Academy's implicit-repetition scheme, FIRe): success flows down
-  `encompasses` edges as fractional reviews. A failure is charged only to the concept the
-  grader's diagnosis names; the concepts that depend on it get "doubt", which makes them
-  eligible for a re-probe, but no penalty.
+**Learner state (derived; never written by a model):**
+- Kept per objective, with acquisition evidence and memory evidence held separately.
+- Starts simple and conservative: fixed difficulty tiers, explicit known / uncertain / gap
+  states, and FSRS only on stable anchor items, fed only by unassisted, resource-appropriate
+  attempts.
+- Application performance is stored separately.
+- Implicit "encompasses" credit (Math Academy's FIRe) runs **in shadow only**, as logged
+  predictions compared with a no-propagation baseline, until it proves it helps.
+- Replay comes in two views, both pinned to versions: *as-observed* and
+  *current-attribution*.
+  - After a split, old evidence goes to children only through reviewed mappings.
+  - Ambiguous evidence stays on the retired parent, or is marked low-confidence.
 
-The *core* (goals, requirements, concepts, items, evidence, planner, scheduler) is
-domain-agnostic. Ingestion, item generation and grading rubrics are per-domain plugins (§4.8).
+**Credit and blame:** a failure is charged only to the objective a constrained diagnosis names.
+Allowed outcomes:
+- one of the tagged objectives or their direct prerequisites,
+- `slip`,
+- `item_defect`,
+- `alternative_valid`,
+- `undetermined`.
+
+Uncertain diagnoses trigger a follow-up probe, not a penalty. Unresolved or disputed grades
+create no strong state updates.
+
+The core is domain-agnostic. Ingestion, item types and rubrics are per-domain plugins. The
+language requirements are in §4.8, as a design checklist only.
 
 ### 4.2 Paper pipeline: what does this paper require?
 
-Steps 0, 3, 5 and 6 are run by code; steps 1, 2 and 4 are model calls.
+The pipeline is a small DAG of persisted stages. Each stage records immutable inputs and hashes,
+bounded retries, explicit failed/partial states and idempotent application. Models never mutate
+the store directly.
 
-0. **Ingest** (code): prefer the arXiv LaTeX source over the PDF, to get macros, definitions,
-   equations and a clean bibliography. Split into addressable spans. Resolve citations to
-   arXiv/Semantic Scholar IDs with dates. Fetch abstracts, and the full text for anything
-   central. Find the linked code repo.
-1. **Paper map** (Opus-class model, grounded): the problem and why the obvious approach fails;
-   the **1–3 load-bearing claims**, each with its evidence (which figure, table or ablation);
-   the method in a paragraph; known or likely weaknesses; the paper's place in its literature,
-   retrieved rather than recalled. This is shown first, and it is what the target exam is
-   written against.
-2. **Requirement extraction** (multiple runs, ≥2 model families, results unioned for recall):
-   - For each claim and each method passage: which concepts must a reader know, to what depth,
-     with spans?
-   - A **mechanical sweep**: code lists every equation and algorithm block, and the model
-     names the concepts needed to read each one.
-   - It also extracts the things the prototype missed: experimental setup and measurement
-     conventions. In the misalignment paper, these were the LLM judge and its thresholds, LoRA
-     and rank-1 adapters.
-3. **Concept resolution** (code proposes, a model adjudicates, code applies with undo):
-   - Code proposes candidates by embedding and keyword search over names, aliases and
-     definitions.
-   - A model decides same / specializes / homonym / new. Matching on a name with a definition
-     is much easier than matching one-sentence claims.
-   - Most of a new paper's requirements should resolve to existing concepts, and the fraction
-     that do is a metric.
-4. **Provenance and novelty** (§4.6), then **edges**:
-   - Only `requires` gates the order of teaching. It is proposed by one call and verified by a
-     second, which sees only the concept definitions and is asked: "could a competent learner
-     understand B while genuinely not knowing A?" Edges both calls agree on are kept;
-     disagreements are downgraded to `helps`.
-   - `encompasses` weights are proposed for credit flow.
-   - `contrasts` edges seed "choose between" items.
-   - A "results support claims" relation does **not** become an ordering edge.
-5. **Disposition** (code, from centrality, reuse across goals and depth): teach / gloss /
-   ignore. Cap: 30–60 candidates per paper before diagnosis. If extraction proposes 200, the
-   granularity prompt is wrong.
-6. **Target exam** (separate call, frozen).
+0. **Source contract** (code):
+   - Each document revision gets explicit version and content-hash identity.
+   - The text is split into addressable spans with a reversible location map.
+   - Inventories of equations, algorithm blocks, tables, figures and captions.
+   - Citations, with resolution confidence and `unresolved` / `ambiguous` outcomes.
+   - Parse-coverage warnings are visible.
+
+   PDF is acceptable at first with honest warnings. Bounded LaTeX support comes next. Extracted
+   archives get no shell escape and no code execution. Paper, repository and citation text is
+   **untrusted data**, delimited in prompts.
+1. **Map** (Opus-class, grounded): the problem and why the obvious approach fails; the **1–3
+   load-bearing claims**, each with its evidence (figure, table, ablation); the method in a
+   paragraph; weaknesses. The paper's place in its literature comes only from a bounded,
+   dated retrieval task, and says when it found nothing.
+2. **Requirement extraction**, as complementary passes, each namespaced `(run, pass, local_id)`,
+   with all raw outputs kept:
+   - **Reader pass:** done *directly from the paper*, not the map, so map errors don't
+     propagate.
+   - **Claim/evidence pass:** what a reader needs to follow each load-bearing claim's
+     evidence.
+   - **Mechanical sweep:** code enumerates every equation, algorithm, table and *measurement
+     or protocol*, and the model names what each needs. This catches what the prototype
+     missed: the LLM judge and its thresholds, LoRA and rank-1 adapters.
+
+   Each candidate carries sense, required capability, served spans, quotes, necessity,
+   centrality, origin hints and an explicit `uncertain`. Known-but-required concepts are kept;
+   the profile prunes *teaching* later, not requirements. Before committing to an ensemble,
+   ablate it: is a strong single call as good as several passes across model families?
+3. **Reconciliation** within the new batch, then **resolution** against the registry. A model
+   proposes; code validates and applies approved decisions with undo.
+   - Directional relations: same, broader, narrower, overlaps, homonym, related, new,
+     uncertain.
+   - Retrieval recall is measured separately from adjudication accuracy.
+   - Borderline merges need owner approval. False merges are worse than duplicates.
+4. **Provenance**, recorded as separate dimensions (§4.6).
+5. **Ordering hints:** soft ordering by default. A **hard** prerequisite is recorded only with a
+   concrete blocked task ("you can't follow eq. 4 without knowing X at explain level"), over
+   objectives rather than concepts, allows alternative routes, and the user can override it.
+   "Results support claims" never becomes an ordering edge.
+6. **Delivery** (code, after diagnosis): teach / gloss inline / ignore. Ignored requirements stay
+   listed in an "ignored" report. The queue shown to the user is capped (top ~5), not the stored
+   extraction.
+7. **Sealed exam** (separate, from the paper only, §1).
 
 ### 4.3 What does this learner lack?
 
-Diagnosis takes a few minutes per paper, before any teaching:
+Diagnosis is short and has its own budget: about 10 minutes per paper by default. That is
+roughly 10–15 one-tap triage clicks plus 5–8 probes.
 
-- **Seed priors** from the profile, the user's own papers and code, and papers already in the
-  store. The second paper inherits what the first established.
-- **Triage screen**: the candidate list with *know it / heard of it / don't know / irrelevant*.
-  Fifty concepts take about two minutes. The answers are evidence, and they are also labels on
-  extraction precision.
-- **Verify the claims that matter.** Self-report is trusted for peripheral concepts. Central
-  concepts marked "know it" get **one** discriminating probe. Software engineers over-claim
-  maths definitions and under-claim things they've used in code without naming them.
-- **Probe top-down**: start at the concepts closest to the paper. A pass marks the concepts
-  it requires as *inferred known* (a distinct, spot-checkable state). Drill down only below a
-  failure. Choose the next probe as the one whose answer settles the most uncertainty.
-- Pretesting is itself a learning aid: attempting a question before instruction improves later
-  learning, even when the attempt fails.
+- **Priors:** the profile (with an editable **active projects** section); the owner's own papers
+  and code; concepts already in the store.
+- **Triage** of only the ~10–15 most central candidates: *know it / heard of it / don't know /
+  irrelevant*. This is not the full list; the research mentor warns against 50-item checklists.
+  Peripheral candidates go to self-report silently, or to on-demand glosses.
+- **5–8 discriminating probes** on the central objectives. Self-reported "know it" on a central
+  objective earns **one** verifying probe. Software engineers over-claim maths definitions and
+  under-claim things they've used in code; Math Academy finds learners overestimate their
+  knowledge.
+- **Conservative inference:** a passed probe gives weak "known" evidence only for objectives
+  the item's key points *necessarily* exercise. No transitive-closure mastery. The metric is
+  spot-checked false-known rate, not the fraction of candidates removed.
+- Pretests help later learning only **with feedback**, so every probe gets brief feedback.
 
-### 4.4 What comes next
+### 4.4 The session
 
-Code scores candidates: `value = goal_weight × need × readiness × (1 + small generality bonus)`.
-`need` = P(gap) for new concepts, or expected forgetting loss for acquired ones. `readiness` = all
-verified `requires` parents are known, which is the "fringe" in tutoring-system terms.
+1. **Problem first:** "Here's the problem this paper solves. How would you approach it? What
+   goes wrong with the obvious approach?" One or two minutes, skippable. This draws on
+   Schwartz & Bransford and productive failure, and also counters the false sense of
+   understanding a fluent map creates.
+2. **The map:** gist, the load-bearing claims and the key figure. Audio optional.
+3. **For the next section:** teach the 1–3 gaps blocking it.
+   - A short grounded explanation, then one question that requires using it, with feedback.
+   - Teach a new concept **by contrast with its known neighbour** (EK-FAC vs. K-FAC; TopK vs.
+     L1 SAEs), since many papers' contribution *is* a contrast. Comparing cases has d≈0.5.
+   - At most 2–3 new concepts per session. Don't introduce two *new* confusable concepts in one
+     session.
+4. **Guided reading of that section:**
+   - **Glosses** for paper-local notation, answered directly.
+   - **"Ask about this paragraph"**: direct answers for definitions and notation. On *core*
+     concepts it gives a hint first and asks him to try, with a visible "just tell me" button.
+     This follows Bastani et al.: unguarded help cut later unaided performance by 17%, and a
+     hint-first tutor avoided that.
+   - **Self-explanation prompts** at each core equation ("in your own words, what is this
+     term doing?").
+   - **"I got stuck here"** and **"already knew"** buttons. Every question and stuck point is
+     logged as gap evidence and as a recall label for extraction.
+5. **After each section:** one or two adjunct questions on the paper.
+6. **After the paper:**
+   - Reconstruct the argument: he states the chain, and it is compared with the map.
+   - Critique: "what's the weakest link? what control would you add?"
+   - Choose / predict / diagnose items on core objectives.
+   - One **project-grounded** question about his active projects.
+   - An optional homework item.
+7. **A follow-up session 1–3 days later:** retrieval on the core plus one transfer question.
+   This is the second, sharpening pass.
+8. **Stopping rule:** separate from the exam. The goal moves to gist-retention mode after the
+   follow-up session, when the owner marks the paper done or after a period of inactivity.
 
-**Session shape for a paper goal:**
+**Feedback ladder after a wrong answer:**
+1. Explain the key point he missed, citing the source.
+2. Retry later with a new variant.
+3. If it fails again, probe the diagnosed prerequisite.
+4. If that still doesn't resolve it, flag the item or concept for the owner.
 
-1. The paper map: a gist plus the key figure, and optionally audio.
-2. For the next section of the paper: teach the 1–3 gaps blocking it. Each gets a short
-   grounded explanation followed by one question that needs it. Problem-first for concepts
-   near his expertise.
-3. Guided reading of that section, with inline glosses for *gloss* concepts, "ask about this
-   paragraph" and "I got stuck here". Each question he asks or place he gets stuck is logged as
-   evidence of a gap and as a label for extraction recall.
-4. After each section: one or two adjunct questions on the paper itself.
-5. After the paper: target-exam questions, choose/predict/diagnose items on the core concepts,
-   and one optional homework item (derive, or implement on a toy model), plus a "how does this
-   apply to *your* project?" question.
-6. A **stopping rule**: passing the target exam drops the goal into gist-retention mode.
+**Format follows the objective's state:**
 
-**Rules:**
-- At most 2–3 new concepts per session.
-- Don't introduce two confusable concepts in the same session.
-- Contrasts come after both sides are acquired.
-- Mix reviews in, preferring a downstream item that encompasses the due concept.
+| State | Format |
+|---|---|
+| New gap | Explanation plus one question |
+| Consolidating | Explain-why / apply items |
+| Discrimination | Choose-between items |
+| Procedure he wants to extend | Worked example, then homework |
 
-**Effort:** the user sets time and context ("10 minutes, phone"). The planner picks the
-highest-value activity that fits. If he keeps choosing low effort, the planner says which
-concepts have only weak evidence. Every activity shows a "why am I seeing this?" line: which
-goal and passage it serves, and the score components.
+At most ~20% of a paper's items are definitional.
+
+**Effort:** he sets time and context. The planner recommends the activity, with a "why am I
+seeing this?" line showing the goal, the passage and the score components. **Agency:** pin, drop,
+or skip with a quick check; reorder the queue; edit the active projects. Matuschak's main lesson
+from the mnemonic medium was that readers need control.
 
 ### 4.5 Teaching artifacts
 
-- **Explanations** (grounded, cached, versioned):
-  - Each sentence carries a source tag: a span, or `background`. `background` is allowed only
-    for `standard` concepts.
-  - They use the paper's notation and running example.
-  - The "example the learner works through" is mandatory. For this user, code or a tiny
-    numeric example is often the best diagram.
-  - Each analogy is labelled as one and says where it breaks.
-  - There is a brevity budget (phone screen).
-  - Each ends with something to do.
-- **Items** follow a pipeline: spec → generate several candidates → an independent solver
-  must reach the key using only the item and the source spans → a leak check (a solver given
-  only the stem and the concept's name must fail) → an ambiguity check (two solvers agree) →
-  code gate. Ground generation in graded examples of good and bad items from the same kind of
-  passage; that raised precision from 56% to 78% in Memory Machines. Keep a small
-  owner-labelled item bank for this.
-- **Grading**:
-  - A key-point rubric: full / partial / none per point, quoting the span of his answer that
-    earns it.
-  - A "must not say" misconception list.
-  - Anchors showing that terse but correct answers get full credit.
-  - The grader runs on a different model family from the generator.
-  - "Needs human" routing goes to the owner.
-  - One-click dispute, which voids the evidence retroactively.
-  - Grade several times and treat disagreement as uncertain.
+**Explanations.**
+- Validated claim by claim. Each claim states its relation to the evidence: quoted or
+  paraphrased (with a span), derived (with its premises, plus an executable check for signs
+  and equations where possible), an illustrative assumption, or a bounded analogy.
+- Central background claims must be grounded in an authoritative fetched source too, not just
+  model memory.
+- Each section keeps a local notation map.
+- Content rules: the worked example is mandatory, and code or a tiny numeric example is often
+  the best "diagram" for this user. Analogies are labelled and say where they break. Brevity
+  budget is a phone screen. Each ends with something to do.
+
+**Items.**
+- Pipeline:
+  1. A spec: objective, allowed resources, assumptions, difficulty tier and answer budget.
+  2. Generate the item together with its versioned rubric.
+  3. Independently check each key point: is it correct, necessary, and what equivalent answers
+     are allowed.
+  4. Blind solvers, who see neither the key nor each other's work, check that the key is
+     correct.
+  5. An adversarial search for alternative valid answers.
+  6. A direct **surface-leakage** check (does the stem state or paraphrase the key points?)
+     and counterfactual variants (change the setup so the answer changes).
+  7. Code gate.
+- The rejected version of this pipeline asked a model to "pretend not to know", which doesn't
+  work because models can't forget.
+- Choose / apply / extend items get an acceptable-answer *space*, not a single string.
+- Ground generation in owner-labelled examples of good and bad items. In Memory Machines,
+  graded examples from the same passage raised precision from 56% to 78%.
+- Log every rejected candidate. Owner audits a sample of *accepted* items.
+
+**Grading.** Four separate steps:
+1. Evaluate each key point semantically. Quotes are validated as exact offsets, but a valid
+   quote doesn't prove correctness.
+2. A global check for contradictions and misconceptions in context. Quoting a misconception in
+   order to refute it is fine.
+3. An optional constrained diagnosis.
+4. A deterministic evidence update.
+
+Other rules:
+- Anchors: terse but correct answers get full credit.
+- The grader comes from a different family from the generator, and role assignments are
+  tested empirically.
+- Aggregation and abstention rules are explicit. "Needs human" stays queued until reviewed.
+- One-click dispute appends a superseding event.
 
 ### 4.6 Unknowns and very new papers
 
-Each concept gets a provenance class: `standard` | `introduced-here` | `from-citation` |
-`unknown`. Signals, combined in code:
+Provenance is several dimensions, not one badge:
 
-- **Dates:** a defining citation that is newer than, or close to, the model's cutoff. The
-  *effective* cutoff varies by topic, so treat dates as a signal, not a rule.
-- **Definitions:** the term is defined in this paper (`\begin{definition}`, "we propose", "we
-  call").
-- **Collision check:** the model defines the term closed-book. Separately, a definition is
-  extracted from the paper and its cited source. A judge compares the two. If they differ, the
-  concept is `grounding-required`, and the difference is worth teaching (name collision, e.g.
-  "emergent misalignment" read as generic emergence).
-- **Existence check:** ask "does X exist?" *before* asking for a definition. Presupposing the
-  term exists increases fabrication.
-- **Disagreement:** different model families give materially different definitions.
+- **Origin**, per occurrence: introduced in this paper, from a citation, external background.
+- **Sense-collision status:**
+  - A closed-book definition is compared with one grounded in the paper and citation.
+  - A mismatch *escalates* to the owner or to grounding. A match never certifies the
+    definition, because shared errors exist.
+  - Ask "does X exist?" before asking for a definition, because presupposing it exists
+    increases fabrication (PhantomBench).
+- **Grounding status**, per assertion or artifact: supported, contradicted, not enough
+  evidence, not applicable.
+- **Model familiarity**, per model and probe. This is a weak signal. A missing cutoff date
+  means `unknown`, never a guess.
 
-`unknown` is a first-class UI state. It shows what the paper itself says, and suggests "read
-[ref 23] first" rather than generating an explanation. Only `standard` concepts may be
-explained from model knowledge, and those are still faithfulness-checked. Every regression run
-includes **canary papers** with invented, plausibly named methods whose definitions differ from
-what the names suggest. The headline metric is the rate of confident errors on post-cutoff and
-canary concepts, and it must be near zero.
+Generation rule: no explanation or item about a central objective passes unless its claims are
+grounded. "Standard" earns no exemption for central claims. Unsupported items show what the
+paper says and suggest "read [ref 23] first".
 
-### 4.7 Maintenance
+**Canaries:** invented methods with familiar-sounding names, altered signs or conditions,
+missing definitions, unresolved citations, and unchanged standard controls, with fresh
+variants each run. Report counts with confidence bounds. Zero errors in 30 independent cases
+still allows roughly a 10% error rate at 95% confidence, so a small suite is a smoke test, not
+a guarantee.
 
-- Concept-level FSRS, with a per-concept target retention set by goal value. Roughly:
+### 4.7 Maintenance (later)
 
-  | Concept status | Target retention |
+- FSRS runs on anchor items, with target retention set by goal value:
+
+  | Concept | Target retention |
   |---|---|
-  | Needed soon by an active goal | ~0.9 |
+  | Active goal needs it soon | ~0.9 |
   | Reusable, still in use | ~0.8 |
-  | Paper-local, goal finished | Let it lapse to recognition, or stop reviewing |
+  | Paper-local, goal finished | Recognition, or stop |
 
-- Long-term review only for concepts reused across goals, plus each paper's one-line claim.
-- A hard daily review budget. When it overflows, auto-postpone by value (the SuperMemo
-  approach) instead of letting a backlog form.
-- Goal weight decays without engagement (half-life of a few weeks) unless pinned. When it gets
-  low, ask once: keep / archive / keep just the general ideas.
+- A hard daily budget; when it overflows, auto-postpone by value (SuperMemo).
+- Goal weight decays without engagement unless pinned. Ask once: keep / archive / keep only the
+  general ideas.
 
-### 4.8 Keeping language learning possible
+### 4.8 Keeping language learning possible (design checklist, not built now)
 
-Requirements for the core now; building it comes later:
-
-- The planner must work with **no** prerequisite edges, using frequency and coverage.
-- No LLM call in the per-item planning loop. Scale to about 10⁴–10⁵ items.
-- Mastery is per (item, facet). Record latency on every test from day one.
-- Evidence kinds include exposure, self-report and test, at different strengths.
-- Probability-known generalizes to untested items, via a learner-level ability over item
+- Planning must work with **no** prerequisite edges, using frequency and coverage, with no LLM
+  call per item, at 10⁴–10⁵ items.
+- Objectives carry facets (read / listen / speak / write), and latency is recorded on every
+  attempt.
+- Evidence comes in kinds: exposure, self-report, test.
+- Probability-known generalizes to untested items through a learner-level ability over item
   features.
-- Goals can be coverage targets ("98% of this show's words") with deadlines.
-- Teach / gloss / ignore is a planner output.
-- Items are separate from prompts. One prompt can test a target and give weak credit to
-  context items.
+- Coverage goals with deadlines (e.g. "98% of this show's words").
+- Teach / gloss / ignore is a planner output. Vocabulary is a concept type.
+- One prompt can test a target and give weak credit to context items.
 - `confusable_with` affects when new items are introduced.
-- Evidence can point to a location in a source: a paper span or an episode timestamp.
-- The learner profile has a domain-specific section (L1, target variety).
+- Evidence can point to a source location, such as an episode timestamp.
+- The profile has a domain-specific section (L1, target variety).
 
-## 5. Agents and their rubrics
+## 5. Agents and rubrics
 
-Every model-made decision has an explicit rubric. Rubrics are **binary or small-ordinal
-criteria, each checkable in under a minute with the cited spans open**. A rubric is validated
-before it is trusted:
-- Cohen's κ ≥ 0.6 against ~30–50 owner labels per criterion.
-- It catches ≥ 90% of defects injected into good outputs: wrong sign, leaked answer,
-  off-target concept, unsupported claim.
-- It is stable when position, format and length change.
+Rubrics use binary or small-ordinal criteria, each checkable with the cited evidence. They are
+**diagnostic instruments, not proof**. Report for each:
+- confusion matrices, κ with class counts and uncertainty;
+- defect sensitivity *and* clean-control pass rate (a judge that rejects everything catches
+  every defect);
+- consequential errors: false full credit, false-known inference, false merge, false approval
+  of wrong content.
 
-Judges come from a different model family than the generator (all available via OpenRouter),
-and model and prompt versions are pinned in every log row.
+Validate only rubrics that **gate a decision or touch the learner**. Labels for the rest come
+from use. Blind judges to which system produced the output. Pin model and prompt versions.
 
-| Decision | Made by | Rubric (abridged) |
+| Decision | Made by | Rubric essentials |
 |---|---|---|
-| Paper map | Opus-class, grounded | Names the 1–3 load-bearing claims, each with the specific figure, table or ablation that supports it. Problem and why the obvious approach fails. Every statement span-cited. An expert would accept it as a fair summary |
-| Requirement (per item) | Multi-run, cross-family | **Grounded**: a span uses it. **Necessary**: names the claim, equation or step that would be misunderstood without it ("helpful background" is tagged context instead). **Depth** matches how the paper uses it. **Granularity** matches the anchor examples. **Centrality** tagged |
-| Requirement set | Code + judge | Recall against the owner's gold list (priority over precision). Every equation and algorithm block covered. Includes setup and measurement conventions |
-| Concept match | Model, code applies | Same / specializes / homonym / new. Merge only if knowing one means knowing the other at the same depth. Checked against a labelled set of concept pairs |
-| `requires` edge | Proposer + blind verifier | "Could a competent learner understand B while not knowing A?" Both must say no. Never from a result to a claim |
-| Provenance | Code + collision probe | Class assigned from signals (§4.6). Canaries flagged |
-| Diagnostic probe | Generator + checks | Discriminates: a model given only the concept's name and a one-line gloss fails, and one with the definition at the target depth passes |
-| Explanation | Generator + faithfulness judge | Faithful (claim-level entailment against spans, or standard background). Targeted at the gap and depth. Doesn't re-explain known concepts. Anchored in the paper's notation. Has the worked example. Bounded analogy. Within the brevity budget. Analogy quality is judged by the owner pairwise, not by a model |
-| Item | Generator → solver → leak and ambiguity checks | Retrieval, not recognition. No leak. Exactly one defensible answer. 1–4 objective key points. Targets the tagged concept at the tagged depth. Novel scenario for "apply" items. Short |
-| Grade | Cross-family grader | Per key point with a quoted evidence span. Meaning, not wording. Terse-correct anchors. Misconception tags. "Needs human" when unsure |
-
-Owner effort is spent where it pays most: a gold set, pairwise preferences rather than Likert
-scores, and only the cases where judges disagree (active selection).
+| Map | Opus-class | Names 1–3 load-bearing claims, each with its specific evidence. Problem and why the obvious approach fails. Every statement span-linked. Fair to the authors (hypotheses marked as such) |
+| Requirement | Complementary passes | Grounded in a span. **Necessary**: names the step that would be misunderstood without it. Capability and depth match the paper's use. Granularity matches anchors. Centrality |
+| Requirement set | Matcher + owner | Semantic coverage of gold and stuck points (Appendix B of the AI-systems review): fully covered only if all required elements are covered at the right depth and sense; several narrow predictions can jointly cover one; broad names get no blanket credit. Macro per paper; core misses listed |
+| Resolution | Model proposes, code applies | Directional relation, with abstention. Merge only if scope and objectives are compatible with the whole destination concept |
+| Hard prerequisite | Proposer + reviewer | A concrete blocked task, over objectives, with alternatives allowed |
+| Explanation | Generator + grounding judge | Each claim supported under its stated relation. Targeted at the gap. Doesn't re-explain known things. Uses the paper's notation. Worked example. Bounded analogy. Brief. Analogy quality judged by the owner, pairwise |
+| Item | Pipeline (§4.5) | Key correct and complete. Acceptable-answer space defined. No surface leakage. Targets its objective. Fits the answer budget |
+| Grade | Four-step grader | Each key point evaluated in context. Contradiction check. Terse-correct anchors. Abstains when unsure |
+| Feedback | Generator + judge | Names the missed key point, cites the source, gives no new unsupported claims, ends with a retry or next step |
+| Companion on core concepts | Policy + test set | Hint first unless he asks to be told; tested on a fixed set of ~10 "just give me the answer" prompts (MRBench-style) |
+| Exam | Separate pipeline | Covers core claims, assumptions, evaluation and one new application. Keys validated. Owner-checked on familiar papers |
 
 ## 6. Evaluation
 
-**Gold sets:**
-- **A. Papers the owner already understands well** (8–15 in his areas, pre- and post-cutoff).
-  For each, about 15–20 minutes writing "what a strong software engineer + general ML person
-  would need, how deeply, and the 3 things that matter most". This is the highest-value
-  annotation.
-- **B. Canary papers** with invented methods, plus real papers published after the model's
-  cutoff.
-- **C. Live papers**: labels from use (triage clicks, stuck points, disputes, "already knew").
-- **D. Item and grading sets**: about 100 owner-labelled items, about 50 of his answers graded
-  by him, and adversarial answers (fluent but wrong, terse but correct, different
-  terminology).
+**Owner labels, cheapest first:**
+- **Triage clicks on the four papers already ingested** (Phase 1a). About 45 minutes on the
+  combined candidate list from the new extractor and the reading-guide baseline, shown blind
+  and in random order. This reuses the devil's advocate's 37 graded facts as seed labels.
+- **Stuck points from his natural reading** in the companion.
+- **2 familiar papers** annotated as capability-level gold entries (Phase 0, ~20 min each),
+  using the format in the AI-systems review's Appendix B. To save his time, a model drafts the
+  entries and he corrects them. This is the small, locked acceptance set.
+- **Disputes and "bad question" clicks.** These are biased toward visible errors, so they are
+  supplemented by a recurring random audit of *accepted* outputs, which catches confident
+  errors that every judge agreed on.
 
-**Stage metrics, re-run on every prompt or model change:**
-- Extraction recall and precision against gold A.
-- Canary flag rate and confident-error rate.
-- Item defect rate.
-- Grader κ against owner grades.
-- Fraction of a new paper's requirements resolved to existing concepts.
-- Top-5 overlap with the owner's "3 things that matter most".
+**Owner time budget:**
 
-Re-run each 3× at production temperature and report the variance.
+| Phase | Owner time |
+|---|---|
+| Phase 0 | ~1 h: gold for 2 familiar papers (~40 min), exam validation (~20 min) |
+| Phase 1a | ~45 min triage of the four ingested papers, plus the first live paper |
+| Each live paper, early phases | ~30–45 min beyond reading: pre-test, two short free-writes, post-test, diagnosis. Shrinks once measurement stabilizes |
+| Audits | ~15 min a week |
 
-**Outcome metrics:**
-- Target exam score: before, after, and 2–4 weeks later.
-- Time to competence.
-- Transfer questions.
-- Calibration of his confidence against his correctness.
-- Process health:
-  - "Already knew" or skip rate: above 30% sustained means diagnosis is broken; near 0% is
-    suspicious.
-  - First-attempt accuracy on new material: target 70–85%.
-  - Dispute rate: under 5%.
-  - Daily review minutes.
-  - Time spent in the paper vs. in modules.
+Every label request is counted against these budgets.
 
-**Causal checks at n=1:**
-- Randomly withhold teaching on about 20% of diagnosed gaps, and maintenance on some reusable
-  concepts. Compare the target-exam questions that depend on them.
-- Alternate papers between "tool" and "read with Claude chat".
-- Log the learner model's predicted P(correct) before every answer, so alternative models can
-  be compared by replaying the log.
+**Datasets:** split by paper before any tuning.
+- **Dev:** the four ingested papers.
+- **Locked acceptance:** the 2 gold familiar papers, plus 2 canary papers.
+- **Prospective:** every live paper. Source,
+parser, registry and learner snapshots are frozen for comparisons, so a warm concept store
+doesn't advantage only the new system.
 
-**Logs (keep all of it):** every model call (stage, prompt version, model, full input and
-output, cost); every planner decision with its score components; every interaction; every graph
-mutation with reason and undo; source snapshots.
+**Metrics:**
+- Pipeline:
+  - requirement coverage (macro, core misses), precision on adjudicated predictions;
+  - stuck-point coverage, tracked separately (stuck points are observed needs, not a complete
+    list);
+  - canary results with denominators;
+  - retrieval recall@k and adjudication accuracy, separately;
+  - false-merge count;
+  - accepted-item defect rate;
+  - grader false-full-credit rate.
+- Learner and outcome: the sealed exam and free-write, time to competence, calibration of
+  confidence (logged with each answer) and process alarms.
+- **Alarms, not gates:**
+
+  | Alarm | Threshold |
+  |---|---|
+  | "Already knew" rate | > 30% |
+  | First-try accuracy on new material | outside 70–85% |
+  | Disputes | > 5% |
+  | Daily review minutes | rising week over week |
+  | Paper time vs. module time | too little time in the paper |
+
+**Causal checks (n=1):**
+- **Pre-teach vs. on-demand:** for randomly chosen gap bundles, skip pre-teaching and rely on
+  glosses and the "ask" box. Record incidental exposure and analyze by assignment. This answers
+  a useful product question, and is honest about the fact that withheld concepts still leak in
+  through other channels.
+- **Tool vs. chat**, later, in matched paper blocks with randomized (ABBA) order and
+  differences decided in advance. Tool papers must improve faster than chat papers; a faster
+  third paper alone proves nothing.
+- Pre-answer predictions are logged so learner models can be compared chronologically by log
+  loss.
+
+**Logs:**
+- Every model call as an artifact: inputs, outputs, prompt and schema hashes, requested and
+  served model, retries, cost. Logged outside graph-mutation transactions.
+- Every planner decision with its score components; every event; every graph change with its
+  undo.
+- Logs stay local. Be explicit about what private material goes to which provider.
 
 ## 7. Top risks
 
 | # | Risk | Early warning | Main mitigation |
 |---|---|---|---|
-| 1 | Over-teaching an expert (40–80 "prerequisites" when 3–8 matter) | "Already knew" > 30%; first-try success > 85%; user reads the paper directly instead | Diagnosis first; triage; top-5 queue; paper as spine |
-| 2 | Confident errors on new material (name collision, stale meanings, fabricated literature) | Explanations without span citations; definitions differ across runs; canary failures | Provenance classes; collision check; grounding gates; `unknown` state |
-| 3 | Illusion of learning (fluent explanations, easy items, lenient grading) | Practice scores > 90% while target-exam scores lag | Frozen independent exam; strict cross-family grader; aim for 70–85% first-try success |
-| 4 | Bad items or grades destroy trust | Disputes > 5%; checker passes everything; grades correlate with answer length | Item pipeline; defect-injection tests; dispute → eval set |
-| 5 | Teaching what's easy to define, not what matters | > 50% definitional items; no items on evidence, controls or design choices | Requirements tied to claims; quotas of choose/predict/diagnose items |
-| 6 | Errors compound across stages (90% per stage ≈ 60% end to end) | Stuck points that map to no concept; mastery jumps after a merge | Per-stage evals; multi-run extraction; reversible merges; reading-companion signal |
-| 7 | Concept store drifts as papers accumulate | Concepts per paper not falling; near-duplicates | Canonical IDs and aliases; periodic consolidation proposals for owner approval |
-| 8 | Review debt → abandonment | Due count rising week over week; skipped days | Value-weighted retention; hard budget; let paper-local items decay |
-| 9 | The tool replaces reading the paper | PDF never opened; can't locate claims in the paper | Activities point into the paper; guided reading is the main activity |
-| 10 | LLM "students" used as evidence of teaching | — | Use simulated students only for mechanical checks (answerability, leaks) |
+| 1 | Over-teaching an expert | "Already knew" > 30%; first-try > 85%; he reads the paper directly | Short diagnosis; top-5 queue; paper as spine; glosses instead of lessons |
+| 2 | Confident errors, including in "standard" maths | Ungrounded claims; definitions differ across runs; canary failures; owner corrections | Grounding required for central claims; collision escalation; executable sign checks; random audits |
+| 3 | Illusion of learning | Practice > 90% while the exam or free-write lags | Sealed independent exam; strict grader; hint-first companion on core concepts; aim for 70–85% first-try |
+| 4 | Bad items or grades destroy trust | Disputes; clean-control failures; grades correlate with length | Item pipeline; feedback ladder; disputes; accepted-output audits |
+| 5 | Teaching what's easy to define, not what matters | > 50% definitional items; no argument or critique practice | Requirements tied to claims; argument as a concept type; item-type quotas |
+| 6 | False measurement (matcher, exam, holdouts) | Scores move without content changing | Validated matcher; exam from paper only; locked acceptance set; honest estimands |
+| 7 | False merges or wrong attribution corrupt state | Mastery jumps after a graph change | Conservative resolution; owner-approved merges; reviewed split mappings; two replay views |
+| 8 | Errors compound across stages | Stuck points that map to nothing | Per-stage loss accounting; complementary passes; companion signal |
+| 9 | Review debt | Due count rising | Value-weighted retention; budget; decay |
+| 10 | The tool replaces reading the paper | PDF never opened | Guided reading is the main activity; activities point into the paper |
+| 11 | Untrusted source text steers the pipeline | Injected-document fixtures fail | Data delimiting; no mutation rights in model calls; no code execution |
 
-## 8. Phases, each with an exit test
+## 8. Phases
 
-Rule: no phase starts until the previous phase's exit test passes. The app grows only as fast
-as measurement allows.
+Each phase ends at a **decision point with a fallback decided in advance**. Thresholds are
+provisional smoke tests, reported with uncertainty.
 
-**Phase 0: evaluation harness and gold data**
-- Owner: pick 8–10 papers he knows well and annotate them (about 3 hours total). Also do a
-  stuck-point read of one *new* paper (about 1–2 hours). That is the devil's advocate's fastest
-  viability test.
-- Build: canary papers; a scoring script for requirement sets against gold A and the stuck
-  points; a one-shot baseline (an Opus "reading guide" for the same papers: argument map plus
-  inline prerequisite explainers).
-- Exit: the scoring runs end to end and the owner trusts the gold labels.
+**Phase 0: foundations and measurement (days 1–3; owner ~1 h)**
+- Build:
+  - the new database and artifact records (Appendix);
+  - the source/span contract (PDF with coverage warnings);
+  - the semantic matcher, validated on a small synonym / sense / decomposition challenge set;
+  - 2 canary papers;
+  - the one-shot reading-guide baseline, plus a normalizer that turns the guide into
+    requirement records so both systems are scored the same way;
+  - the exam generator.
+- Owner: correct model-drafted gold for 2 familiar papers, and validate their sealed exams.
+- Decision: the gold, the guide baseline and the canaries can be scored from saved artifacts,
+  and every match is inspectable.
+- **Fallback:** if the matcher can't be validated, score by owner review of the match tables
+  for the acceptance papers only.
 
-**Phase 1: requirements engine (no learner model yet)**
-- LaTeX ingest and citation resolution, paper map, multi-run cross-family requirement
-  extraction with the equation sweep, provenance classes, concept store with resolution and
-  typed edges, dispositions, target exam.
-- Output: an HTML report per paper (map, requirements with spans and provenance badges,
-  concept graph) plus a triage page the owner can click through.
-- Exit:
-  - Recall ≥ 0.8 against gold A and the stuck points.
-  - Precision ≥ 0.5 before triage.
-  - Canary confident-error rate ≈ 0.
-  - Beats the one-shot reading guide on recall at equal or better precision. If it doesn't, the
-    reading guide becomes the per-paper core, and the concept store is kept only for
-    cross-paper reuse.
+**Phase 1a: requirements + reading companion on a real paper (end of week 1)**
+- Build:
+  - map, complementary extraction passes, reconciliation, grounding states;
+  - delivery dispositions with a top-5 queue;
+  - companion v0: section text, glosses, the "ask" box (hint-first on core concepts),
+    self-explanation prompts at core equations, stuck / already-knew / bad buttons, event log;
+  - a minimal web UI with no learner model yet: FastAPI + SQLite, like the owner's
+    chess-pretraining-for-humans repo, but with a component-based frontend.
+- Owner: the next paper he wants to read anyway. Sealed pre-test and free-write first, then
+  read with the companion, then the post-test.
+- Decision:
+  - On the acceptance papers and stuck points, does the requirements engine beat the one-shot
+    reading guide by more than run-to-run variance?
+  - Provisional smoke checks: macro recall ≥ 0.8, adjudicated precision ≥ 0.5, no accepted
+    ungrounded central assertions on canaries.
+  - **Fallback:** if it doesn't beat the guide, the guide becomes the per-paper core and the
+    concept store is kept only for cross-paper reuse.
 
-**Phase 2: diagnosis, items and grading**
-- Triage, top-down probes with inference, the item pipeline, the cross-family grader with key
-  points, disputes. A minimal web UI: FastAPI + SQLite, following the chess-pretraining setup,
-  with a component-based frontend.
-- Exit:
-  - Item defect rate under 10% on owner review.
-  - Grader κ ≥ 0.6 against his grades.
-  - Diagnosis removes ≥ 60% of candidates in under 10 minutes, and spot-checks show the
-    removed ones really were known.
+**Phase 1b: safe cross-paper reuse**
+- Build: conservative resolution across 2–3 related papers (including the next real paper),
+  many-to-many provenance, undo, and ordering-sensitivity tests.
+- Decision: owner-reviewed merges with no unexplained evidence loss. False merges and duplicates
+  are reported.
+- **Fallback:** if resolution is unreliable, keep per-paper requirement sets and link concepts
+  only by owner approval.
 
-**Phase 3: the teaching loop and reading companion**
-- The paper map view, just-in-time explanations, guided reading with glosses / ask / "stuck
-  here", post-reading items, the target exam, the event log with predictions.
-- Exit, over 3–4 real papers:
-  - Target-exam scores beat the "read with Claude chat" papers at equal or lower time, **or**
-    the time per paper drops clearly from paper 1 to paper 3 in the same area.
-  - "Already knew" stays under 30%.
+**Phase 2: diagnosis, explanations, items, feedback (weeks 2–3)**
+- Build:
+  - triage of the central candidates plus 5–8 probes;
+  - just-in-time explanations with one item each;
+  - the item pipeline and the four-step grader;
+  - the feedback ladder, disputes;
+  - the pre-teach vs. on-demand assignment;
+  - the post-paper argument / critique / project questions;
+  - the 1–3 day follow-up.
+- Decision:
+  - accepted-item defect rate < 10% on an owner-audited sample;
+  - grader κ ≥ 0.6 with false-full-credit reported;
+  - false-known audit of diagnosis;
+  - alarms quiet.
+- **Fallback:** if items or grading fail, fall back to owner-approved items and self-grading with
+  key points shown, and keep improving the pipeline offline.
 
-**Phase 4: maintenance and multiple goals**
-- Concept-level FSRS with implicit credit, budgets, goal decay, stopping rules, the
-  withheld-maintenance holdout.
+**Phase 3: live use over 3–5 papers, hardening**
+- Harden the components that disputes and audits show are weakest. Start the first matched
+  tool-vs-chat block.
+- Decision: a usability and feasibility read on overhead, errors, and whether exam scores reach
+  a floor of ≥ 70% on core questions after reading. No superiority claim yet.
+- **Fallback:** if overhead swamps the benefit (the owner would rather read with chat), cut to
+  map + companion + glosses only, and re-test.
 
-**Later:** more effort modes (generated audio for exposure, spoken answers, code-verified
-homework); a language-learning pilot using the §4.8 requirements; learned models fitted on the
-replayable log.
+**Phase 4: retention and multiple goals**
+- Anchor-based FSRS, budgets, goal decay. Implicit credit stays in shadow mode.
+- Operational exit: bounded queue, tested archival, reproducible replay.
+- **Fallback:** if delayed retention doesn't beat no-review on the holdout, keep only the
+  per-paper one-line claims and reusable concepts in review.
+- Evidence checkpoint: delayed performance and calibration against a no-implicit-credit
+  baseline.
 
-## 9. Decisions needed from the owner
+**Later:** audio exposure, spoken answers, code-verified homework, a language pilot, learned
+models fitted on the log.
 
-1. **Gold-set time.** About 3 hours to annotate 8–10 papers he knows, plus 1–2 hours for one
-   stuck-point read. This is the most valuable input to the whole plan. Which papers?
-2. **Cross-family judges.** Use GPT and Gemini via OpenRouter for checking and grading Claude
-   outputs, and the reverse? Recommended.
-3. **LaTeX source.** Prefer arXiv LaTeX, falling back to PDF? Recommended.
-4. **Prototype code.** Rework the existing repo in place (keeping its infrastructure) rather
-   than starting over? Recommended.
+**Deferred on purpose:** global hard-prerequisite graphs, automatic concept splits,
+`encompasses` memory credit, learned item difficulty, graph visualisation, and the
+domain-plugin framework.
+
+## 9. Decisions for the owner
+
+1. **Next paper:** which paper does he want to read next? It becomes the first live test in
+   Phase 1a.
+2. **Two or three familiar papers** for the locked acceptance set and exam validation.
+3. **Cross-family roles:** use GPT and Gemini via OpenRouter as judges and graders for Claude
+   output, and vice versa. Recommended.
+4. **Privacy:** may unpublished drafts or private code be sent to these providers when he adds
+   his own work to the profile?
+5. **Rework in place:** keep the repo and infrastructure, and treat the old pool as read-only
+   legacy. Recommended.
+
+## Appendix: the Phase 0/1a build contract
+
+- **Storage:**
+  - A new SQLite file, `data/frontier.db`, with explicit schema migrations.
+  - Tables follow the AI-systems review's Appendix A: Source, DocumentRevision, Span,
+    Assertion, Concept and ConceptRevision, Objective, Requirement, ResolutionDecision,
+    PrerequisiteRule, Artifact.
+  - ItemVersion and Event tables are added before the first probe.
+  - The old `data/pool.db` stays read-only.
+  - `cluster.py`, `review.py` and the fact logic in `merge.py` stay in the repo for comparison,
+    but new code doesn't depend on them.
+- **Artifacts:** every model call writes `data/artifacts/<stage>/<artifact_id>.json` (the
+  Artifact fields) before any database change.
+- **Model roles (pinned; changing them triggers a re-run of the acceptance set):**
+
+  | Role | Model |
+  |---|---|
+  | Map, reader pass, explanations | `anthropic/claude-opus-5.5` |
+  | Claim/evidence pass, mechanical sweep, reconciliation | `anthropic/claude-sonnet-5.5` |
+  | Second-family extraction pass, exam generation, judges, graders | `openai/gpt-6.1-sol` |
+  | Third-family tie-breaks | `google/gemini-3.8-flash`, or a Gemini Pro-class model if one is available |
+  | Embeddings | `voyageai/voyage-4` |
+
+  Training cutoffs are recorded per model from provider documentation, or `unknown`.
+- **Canaries:** 2 short model-written papers, owner-checked. Each has 3 invented methods with
+  familiar-sounding names, one altered sign or condition in a standard result, one undefined
+  term and one unresolvable citation, plus standard controls. Add one real post-cutoff paper
+  when one is available.
+- **Granularity anchors:** seeded from the devil's-advocate grades (its A-grade and F-grade
+  examples) and the research mentor's good/bad item examples. Refined from triage labels.
+- **CLI:**
+  - `frontier ingest <pdf|arxiv-id>`
+  - `frontier map <paper>`
+  - `frontier extract <paper>`
+  - `frontier guide <paper>` (baseline)
+  - `frontier exam <paper>`
+  - `frontier score <paper>`: requirement coverage vs. gold, stuck points and guide
+  - `frontier canary`
+  - `frontier serve`: a FastAPI app on the owner's machine, reachable over Tailscale, serving
+    the triage page in Phase 0/1a, then the companion.
+- **Reports:** a per-paper HTML report (map, requirements with spans and provenance, match
+  tables against gold and the guide) written to `reports/`.
