@@ -62,7 +62,7 @@ async function review(btn, exam, qid, verdict) {
   box.querySelectorAll(".vbtn").forEach(b => b.classList.toggle("on", b === btn));
 }
 async function missing(rev) {
-  const t = document.getElementById("missing");
+  const t = document.getElementById("missing-text");
   if (!t.value.trim()) return;
   await post("/api/missing", {revision_id: rev, text: t.value});
   t.value = ""; document.getElementById("missing-saved").textContent = "Saved.";
@@ -182,7 +182,7 @@ def create_app(db_path: Path) -> FastAPI:
             )
         out.append(
             "<h2>Missing</h2><p>Anything you'd need for this paper that isn't listed above?</p>"
-            "<textarea id='missing' rows='4'></textarea>"
+            "<textarea id='missing-text' rows='4'></textarea>"
             f"<button class='vbtn' onclick=\"missing('{escape(revision_id)}')\">Save</button> "
             "<span id='missing-saved'></span>"
         )
