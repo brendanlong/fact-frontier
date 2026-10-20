@@ -190,9 +190,8 @@ def test_label_page_hides_details_until_labelled_and_records_blindness(conn, tmp
     assert "<div class='hidden-details' hidden>" in page
     client.post("/api/label", json={"candidate_id": cid, "label": "know", "revealed": False})
     client.post("/api/label", json={"candidate_id": cid, "label": "partly", "revealed": True})
-    assert conn.execute(
-        "SELECT label, revealed FROM owner_labels ORDER BY label_id"
-    ).fetchall() == [
+    rows = conn.execute("SELECT label, revealed FROM owner_labels ORDER BY label_id")
+    assert [tuple(r) for r in rows] == [
         ("know", 0),
         ("partly", 1),
     ]
