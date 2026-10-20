@@ -206,3 +206,67 @@ def load_exam(conn: sqlite3.Connection, exam_id: str) -> Exam:
     if hashlib.sha256(exam.model_dump_json().encode()).hexdigest() != row[1]:
         raise ValueError(f"exam {exam_id} changed since it was frozen")
     return exam
+
+
+# --- Self-test questions for blind owner labelling -----------------------------------------
+
+
+class SelfTest(BaseModel):
+    candidate_id: str
+    question: str
+
+
+class SelfTests(BaseModel):
+    questions: list[SelfTest]
+
+
+SELF_TEST_SYSTEM = """\
+For each requirement below (something a reader needs to understand a paper), write one short
+question a reader could try to answer in their head to check whether they understand it. The
+reader sees only your question, and decides whether they could answer it before being shown
+the requirement's details. So the question must not contain or hint at the answer: don't
+state the claim, the mechanism, the direction of an effect or any of the listed elements. Ask
+about the thing, at the stated depth ("why does...", "how would you...", "what goes wrong
+if..."), using the paper's terms only as far as needed to identify it. One sentence each.
+Return one question per candidate_id."""
+
+
+def self_tests(client: Client, conn: sqlite3.Connection, revision_id: str) -> int:
+    rows = conn.execute(
+        "SELECT candidate_id, label, capability, depth, required_elements FROM"
+        " requirement_candidates WHERE revision_id = ? AND system = 'gold_draft'"
+        " AND self_test IS NULL",
+        (revision_id,),
+    ).fetchall()
+    written = 0
+    for i in range(0, len(rows), 20):
+        batch = rows[i : i + 20]
+        ids = {r[0] for r in batch}
+        user = "\n\n".join(
+            f"candidate_id: {r[0]}\nlabel: {r[1]}\ndepth: {r[3]}\ncapability: {r[2]}\n"
+            f"elements (do not reveal): {'; '.join(json.loads(r[4]))}"
+            for r in batch
+        )
+
+        def check(result: SelfTests, ids: set[str] = ids) -> None:
+            got = {q.candidate_id for q in result.questions}
+            if got != ids:
+                raise ValueError(f"expected {sorted(ids)}, got {sorted(got)}")
+
+        result, _ = client.structured(
+            "self_test",
+            client.roles.self_test,
+            SelfTests,
+            SELF_TEST_SYSTEM,
+            user,
+            subject=revision_id,
+            effort="low",
+            validate=check,
+        )
+        with conn:
+            conn.executemany(
+                "UPDATE requirement_candidates SET self_test = ? WHERE candidate_id = ?",
+                [(q.question, q.candidate_id) for q in result.questions],
+            )
+        written += len(result.questions)
+    return written

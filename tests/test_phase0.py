@@ -176,3 +176,24 @@ def test_dehyphenation_keeps_suspended_hyphens():
     assert spans[0].text == (
         "We use first- and second-order methods, which were continued later in training."
     )
+
+
+def test_label_page_hides_details_until_labelled_and_records_blindness(conn, tmp_path):
+    seed_revision(conn)
+    store_candidates(conn, "r1", "gold_draft", "a1", [req(["S1"])], ingest.span_ids(conn, "r1"))
+    cid = conn.execute("SELECT candidate_id FROM requirement_candidates").fetchone()[0]
+    with conn:
+        conn.execute("UPDATE requirement_candidates SET self_test = 'Why is KL odd?'")
+    client = TestClient(create_app(tmp_path / "f.db"))
+    page = client.get("/label/r1").text
+    assert "Why is KL odd?" in page
+    assert "<div class='hidden-details' hidden>" in page
+    client.post("/api/label", json={"candidate_id": cid, "label": "know", "revealed": False})
+    client.post("/api/label", json={"candidate_id": cid, "label": "partly", "revealed": True})
+    assert conn.execute(
+        "SELECT label, revealed FROM owner_labels ORDER BY label_id"
+    ).fetchall() == [
+        ("know", 0),
+        ("partly", 1),
+    ]
+    assert "<div class='hidden-details'>" in client.get("/label/r1").text

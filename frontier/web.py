@@ -47,11 +47,20 @@ async function post(url, body) {
     body: JSON.stringify(body)});
   if (!r.ok) { alert("Save failed: " + await r.text()); throw new Error(); }
 }
+function reveal(box) {
+  box.dataset.revealed = "1";
+  box.querySelector(".hidden-details").hidden = false;
+  box.querySelector(".reveal").hidden = true;
+}
 async function label(btn) {
   const box = btn.closest(".req");
   await post("/api/label", {candidate_id: box.dataset.cid, label: btn.dataset.value,
-    note: box.querySelector("input.note").value});
+    note: box.querySelector("input.note").value, revealed: box.dataset.revealed === "1"});
   box.querySelectorAll(".btns button").forEach(b => b.classList.toggle("on", b === btn));
+  if (box.dataset.revealed !== "1") {
+    reveal(box);
+    box.querySelector(".recheck").hidden = false;
+  }
   box.dataset.done = "1";
   const done = document.querySelectorAll(".req[data-done='1']").length;
   const p = document.getElementById("done"); if (p) p.textContent = done;
@@ -82,6 +91,7 @@ class LabelIn(BaseModel):
     candidate_id: str
     label: str
     note: str = ""
+    revealed: bool = True
 
 
 class MissingIn(BaseModel):
@@ -157,9 +167,11 @@ def create_app(db_path: Path) -> FastAPI:
         )
         out = [
             f"<p class='progress'><span id='done'>{sum(c['candidate_id'] in latest for c in cands)}"
-            f"</span>/{len(cands)} labelled. Label each by whether <b>you</b> already understand "
-            "it at the depth shown. <i>Not needed</i>: the paper doesn't really require it. "
-            "<i>Wrong</i>: incorrect or misleading.</p>"
+            f"</span>/{len(cands)} labelled. For each, try to answer it in your head first, "
+            "then say whether <b>you</b> could. The details (which give the answer away) appear "
+            "after you choose, and you can change your answer then. Use <i>Show details</i> "
+            "if you can't tell what's being asked, or to mark an item <i>not needed</i> (the "
+            "paper doesn't really require it) or <i>wrong</i>.</p>"
         ]
         for c in cands:
             cur = latest.get(c["candidate_id"])
@@ -168,19 +180,33 @@ def create_app(db_path: Path) -> FastAPI:
                 f"<p>{escape(spans.get(s, s)[:400])}</p>"
                 for s in json.loads(c["served_span_ids"])[:3]
             )
-            buttons = "".join(
-                f"<button class='{'on' if cur == v else ''}' data-value='{v}' "
-                f"onclick='label(this)'>{t}</button>"
-                for v, t in LABELS
-            )
+
+            def btn(v: str, t: str, cur: str | None = cur) -> str:
+                return (
+                    f"<button class='{'on' if cur == v else ''}' data-value='{v}' "
+                    f"onclick='label(this)'>{t}</button>"
+                )
+
+            seen = 1 if cur else 0
+            hidden = "" if seen else " hidden"
             out.append(
-                f"<div class='req' data-done='{1 if cur else 0}' "
-                f"data-cid='{escape(c['candidate_id'], quote=True)}'><b>{escape(c['label'])}</b> "
-                f"<span class='meta'>· {c['depth']} · {c['centrality'].replace('_', ' ')}</span>"
-                f"<div>{escape(c['capability'])}</div><ul>{elements}</ul>"
+                f"<div class='req' data-done='{seen}' data-revealed='{seen}' "
+                f"data-cid='{escape(c['candidate_id'], quote=True)}'>"
+                f"<span class='meta'>{c['depth']}</span>"
+                f"<div>{escape(c['self_test'] or c['capability'])}</div>"
+                f"<div class='btns'>{''.join(btn(v, t) for v, t in LABELS[:3])}"
+                f"<button class='reveal'{' hidden' if seen else ''} "
+                "onclick='reveal(this.closest(\".req\"))'>Show details</button></div>"
+                f"<div class='hidden-details'{hidden}>"
+                "<p class='recheck meta' hidden>Now that you can see the answer: still right? "
+                "Click again to change it.</p>"
+                f"<div class='meta'>{escape(c['capability'])}</div>"
+                f"<b>{escape(c['label'])}</b> <span class='meta'>· "
+                f"{c['centrality'].replace('_', ' ')}</span><ul>{elements}</ul>"
                 f"<div class='meta'>Why needed: {escape(c['why_needed'])}</div>"
                 f"<details class='spans'><summary>Where the paper uses it</summary>{span_text}"
-                f"</details><div class='btns'>{buttons}</div>"
+                f"</details><div class='btns'>{''.join(btn(v, t) for v, t in LABELS[3:])}</div>"
+                "</div>"
                 "<input class='note' placeholder='Optional note (saved with the next click)'></div>"
             )
         out.append(
@@ -246,8 +272,8 @@ def create_app(db_path: Path) -> FastAPI:
             raise HTTPException(404, "no such draft requirement")
         with conn:
             conn.execute(
-                "INSERT INTO owner_labels (candidate_id, label, note) VALUES (?, ?, ?)",
-                (body.candidate_id, body.label, body.note),
+                "INSERT INTO owner_labels (candidate_id, label, note, revealed) VALUES (?,?,?,?)",
+                (body.candidate_id, body.label, body.note, int(body.revealed)),
             )
         return {"ok": True}
 

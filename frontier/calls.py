@@ -36,6 +36,7 @@ class Roles:
     # Different family from the guide it judges, to avoid self-preference.
     matcher: str = "openai/gpt-6.1-sol"
     canary: str = "anthropic/claude-opus-5.5"
+    self_test: str = "anthropic/claude-sonnet-5.5"
     embed: str = "voyageai/voyage-4"
 
 

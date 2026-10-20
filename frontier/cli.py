@@ -122,6 +122,8 @@ def cmd_generate(args: argparse.Namespace) -> None:
             artifact = generate.guide(client, conn, revision_id, args.profile.read_text())
         elif args.kind == "draft":
             artifact = generate.gold_draft(client, conn, revision_id)
+        elif args.kind == "self-test":
+            artifact = f"{generate.self_tests(client, conn, revision_id)} questions"
         else:
             artifact = generate.exam(client, conn, revision_id, sealed=not args.reviewable)
         print(f"{revision_id}: {args.kind} -> {artifact}")
@@ -192,6 +194,7 @@ def main(argv: list[str] | None = None) -> None:
         ("guide", "one-shot reading guide baseline (learner-specific)"),
         ("draft", "recall-oriented requirement draft for owner labelling"),
         ("exam", "exam written from the paper alone (sealed unless --reviewable)"),
+        ("self-test", "blind self-test questions for the draft requirements"),
     ]:
         p = sub.add_parser(kind, help=help_text)
         p.add_argument("papers", nargs="+", help="revision ID, source ID, or part of one")

@@ -121,6 +121,18 @@ MIGRATIONS = [
     """
     ALTER TABLE exams ADD COLUMN sealed INTEGER NOT NULL DEFAULT 0;
     """,
+    # Whether the owner had seen the requirement's details (its elements, which give away the
+    # answer) when he chose the label. The first, blind label measures what he knew; a revised
+    # label after seeing the details is usually more accurate, and the revision rate itself says
+    # how much blind self-assessment over- or under-claims.
+    """
+    ALTER TABLE owner_labels ADD COLUMN revealed INTEGER NOT NULL DEFAULT 1;
+    """,
+    # A question that tests the requirement without stating its answer, shown to the owner
+    # before he self-assesses (the capability statement often contains the claim itself).
+    """
+    ALTER TABLE requirement_candidates ADD COLUMN self_test TEXT;
+    """,
 ]
 
 
