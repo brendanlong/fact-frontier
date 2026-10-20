@@ -126,3 +126,53 @@ def test_label_api_appends_and_sealed_exams_are_hidden(conn, tmp_path):
     assert "review exam" not in client.get("/").text
     assert client.get("/exam/a1").status_code == 404
     assert "<span id='done'>1</span>/1 labelled" in client.get("/label/r1").text
+
+
+def test_label_and_review_posts_reject_unknown_or_sealed_targets(conn, tmp_path):
+    seed_revision(conn)
+    with conn:
+        conn.execute(
+            "INSERT INTO exams (exam_id, revision_id, artifact_id, content_hash, sealed)"
+            " VALUES ('a1', 'r1', 'a1', 'h', 1)"
+        )
+    client = TestClient(create_app(tmp_path / "f.db"))
+    assert (
+        client.post("/api/label", json={"candidate_id": "nope", "label": "know"}).status_code == 404
+    )
+    review = {"exam_id": "a1", "question_id": "q1", "verdict": "good"}
+    assert client.post("/api/exam_review", json=review).status_code == 404
+    assert client.post("/api/missing", json={"revision_id": "nope", "text": "x"}).status_code == 404
+
+
+def test_load_exam_refuses_a_changed_artifact(conn, tmp_path):
+    from frontier import generate
+
+    seed_revision(conn)
+    exam = generate.Exam(questions=[])
+    path = tmp_path / "exam.json"
+    path.write_text(
+        json.dumps({"response": {"choices": [{"message": {"content": exam.model_dump_json()}}]}})
+    )
+    with conn:
+        conn.execute(
+            "INSERT INTO artifacts (artifact_id, stage, requested_model, prompt_hash,"
+            " schema_name, params, path, outcome) VALUES ('e1','exam','m','h','Exam','{}',?,'ok')",
+            (str(path),),
+        )
+        conn.execute(
+            "INSERT INTO exams (exam_id, revision_id, artifact_id, content_hash)"
+            " VALUES ('e1', 'r1', 'e1', 'not-the-hash')"
+        )
+    with pytest.raises(ValueError):
+        generate.load_exam(conn, "e1")
+    with pytest.raises(KeyError):
+        generate.load_exam(conn, "missing")
+
+
+def test_dehyphenation_keeps_suspended_hyphens():
+    spans, _ = ingest.split_spans(
+        ["We use first- and second-order methods, which were con- tinued later in training."]
+    )
+    assert spans[0].text == (
+        "We use first- and second-order methods, which were continued later in training."
+    )

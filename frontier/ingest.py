@@ -16,7 +16,7 @@ from pathlib import Path
 
 from frontier.sources import ARXIV_ID
 
-PARSER_VERSION = "pdftotext-paragraphs-2"
+PARSER_VERSION = "pdftotext-paragraphs-3"
 
 # Lines a browser adds when printing a web page to PDF ("3 of 86", the URL, a timestamp).
 PRINT_NOISE = [
@@ -67,7 +67,9 @@ def split_spans(pages: list[str]) -> tuple[list[Span], list[str]]:
         page_chars = 0
         for para in paragraphs:
             text = re.sub(r"\s*\n\s*", " ", para).strip()
-            text = re.sub(r"(\w)- (\w)", r"\1\2", text)
+            # Rejoin words hyphenated across a line break ("con- tinued"), but not suspended
+            # hyphens ("first- and second-order").
+            text = re.sub(r"([a-z])- (?!(?:and|or|to|vs)\b)([a-z])", r"\1\2", text)
             if len(text) < 3:
                 continue
             page_chars += len(text)

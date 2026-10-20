@@ -29,7 +29,7 @@ def check_matcher(client: Client, path: Path) -> list[tuple[str, str, str]]:
             Req(f"X{i}", p["label"], p["sense"], p["capability"], p["depth"], p["elements"])
             for i, p in enumerate(case["predicted"])
         ]
-        links = matcher.judge(client, [gold], preds, subject=f"challenge:{case['name']}")
+        links, _ = matcher.judge(client, [gold], preds, subject=f"challenge:{case['name']}")
         out.append((case["name"], case["expect"], bucket(matcher.coverage(gold, links["G1"]))))
     return out
 
@@ -45,20 +45,55 @@ def latest_labels(conn: sqlite3.Connection, revision_id: str) -> dict[str, str]:
 
 
 def score_paper(
-    conn: sqlite3.Connection, client: Client, revision_id: str, predicted: str, gold_system: str
+    conn: sqlite3.Connection,
+    client: Client,
+    revision_id: str,
+    predicted: str,
+    gold_system: str,
+    include_unlabelled: bool = False,
 ) -> dict:
+    """Gold is the owner-labelled draft minus what he marked not needed or wrong. Unlabelled
+    draft items are model output nobody has vetted, so they're left out unless asked for."""
     labels = latest_labels(conn, revision_id)
     gold = [
-        g for g in matcher.load(conn, revision_id, gold_system) if labels.get(g.rid) not in EXCLUDED
+        g
+        for g in matcher.load(conn, revision_id, gold_system)
+        if labels.get(g.rid) not in EXCLUDED and (include_unlabelled or g.rid in labels)
     ]
     preds = matcher.load(conn, revision_id, predicted)
     if not gold or not preds:
-        raise SystemExit(f"need both {gold_system} and {predicted} candidates for {revision_id}")
-    links = matcher.judge(client, gold, preds, subject=f"score:{revision_id}:{predicted}")
+        raise SystemExit(
+            f"need labelled {gold_system} and {predicted} candidates for {revision_id}"
+            " (or --include-unlabelled)"
+        )
+    links, judged_by = matcher.judge(
+        client, gold, preds, subject=f"score:{revision_id}:{predicted}"
+    )
+    with conn:
+        conn.executemany(
+            "INSERT INTO matches (gold_id, predicted_id, relation, covered_elements, artifact_id)"
+            " VALUES (?, ?, ?, ?, ?)",
+            [
+                (g, link.predicted, link.relation, json.dumps(link.covered_elements), judged_by[g])
+                for g, ls in links.items()
+                for link in ls
+            ],
+        )
     cov = {g.rid: matcher.coverage(g, links.get(g.rid, [])) for g in gold}
     used = {
-        link.predicted for ls in links.values() for link in ls if link.relation in matcher.COVERING
+        link.predicted
+        for ls in links.values()
+        for link in ls
+        if link.relation == "equivalent"
+        or (link.relation == "covers_part" and link.covered_elements)
     }
+    missing = [
+        r[0]
+        for r in conn.execute(
+            "SELECT text FROM owner_missing WHERE revision_id = ? ORDER BY missing_id",
+            (revision_id,),
+        )
+    ]
     gaps = [g for g in gold if labels.get(g.rid) in GAPS]
     return {
         "revision_id": revision_id,
@@ -76,6 +111,8 @@ def score_paper(
         "n_gaps": len(gaps),
         "matched_precision": len(used) / len(preds),
         "unmatched": [p for p in preds if p.rid not in used],
+        "owner_missing": missing,
+        "judge_artifacts": sorted(set(judged_by.values())),
     }
 
 
@@ -111,11 +148,23 @@ def render_report(result: dict) -> str:
             f"<td>{escape(result['labels'].get(g.rid, ''))}</td>"
             f"<td class='{bucket(c)}'>{c:.0%}</td><td>{by}</td></tr>"
         )
-    out.append("</table><h2>Unmatched predictions</h2><ul>")
+    out.append(
+        f"</table><h2>Missing from the draft ({len(result['owner_missing'])})</h2>"
+        "<p class='muted'>Requirements the owner said were missing. They aren't in the recall "
+        "denominator yet, so recall overstates coverage by up to this many entries.</p><ul>"
+        + "".join(f"<li>{escape(m)}</li>" for m in result["owner_missing"])
+        + "</ul>"
+    )
+    out.append("<h2>Unmatched predictions</h2><ul>")
     out += [
         f"<li><b>{escape(p.label)}</b>: {escape(p.capability)}</li>" for p in result["unmatched"]
     ]
     out.append("</ul>")
+    out.append(
+        "<p class='muted'>Judge calls: "
+        + ", ".join(f"<code>{escape(a)}</code>" for a in result["judge_artifacts"])
+        + "</p>"
+    )
     title = (
         f"Requirement coverage: {result['predicted']} vs {result['gold_system']}, "
         f"{result['revision_id']}"

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from frontier import generate, store
 
 TEMPLATE = Path(__file__).with_name("report_template.html")
+VERDICTS = [("good", "Good"), ("fix", "Fix"), ("drop", "Drop")]
 LABELS = [
     ("know", "Know it"),
     ("partly", "Partly"),
@@ -46,25 +47,26 @@ async function post(url, body) {
     body: JSON.stringify(body)});
   if (!r.ok) { alert("Save failed: " + await r.text()); throw new Error(); }
 }
-async function label(btn, cid, value) {
+async function label(btn) {
   const box = btn.closest(".req");
-  await post("/api/label", {candidate_id: cid, label: value,
+  await post("/api/label", {candidate_id: box.dataset.cid, label: btn.dataset.value,
     note: box.querySelector("input.note").value});
   box.querySelectorAll(".btns button").forEach(b => b.classList.toggle("on", b === btn));
   box.dataset.done = "1";
   const done = document.querySelectorAll(".req[data-done='1']").length;
   const p = document.getElementById("done"); if (p) p.textContent = done;
 }
-async function review(btn, exam, qid, verdict) {
+async function review(btn) {
   const box = btn.closest(".req");
-  await post("/api/exam_review", {exam_id: exam, question_id: qid, verdict: verdict,
+  await post("/api/exam_review", {exam_id: box.dataset.exam, question_id: box.dataset.qid,
+    verdict: btn.dataset.value,
     note: box.querySelector("input.note").value});
   box.querySelectorAll(".vbtn").forEach(b => b.classList.toggle("on", b === btn));
 }
-async function missing(rev) {
+async function missing(btn) {
   const t = document.getElementById("missing-text");
   if (!t.value.trim()) return;
-  await post("/api/missing", {revision_id: rev, text: t.value});
+  await post("/api/missing", {revision_id: btn.dataset.rev, text: t.value});
   t.value = ""; document.getElementById("missing-saved").textContent = "Saved.";
 }
 </script>
@@ -167,12 +169,13 @@ def create_app(db_path: Path) -> FastAPI:
                 for s in json.loads(c["served_span_ids"])[:3]
             )
             buttons = "".join(
-                f"<button class='{'on' if cur == v else ''}' "
-                f"onclick=\"label(this, '{c['candidate_id']}', '{v}')\">{t}</button>"
+                f"<button class='{'on' if cur == v else ''}' data-value='{v}' "
+                f"onclick='label(this)'>{t}</button>"
                 for v, t in LABELS
             )
             out.append(
-                f"<div class='req' data-done='{1 if cur else 0}'><b>{escape(c['label'])}</b> "
+                f"<div class='req' data-done='{1 if cur else 0}' "
+                f"data-cid='{escape(c['candidate_id'], quote=True)}'><b>{escape(c['label'])}</b> "
                 f"<span class='meta'>· {c['depth']} · {c['centrality'].replace('_', ' ')}</span>"
                 f"<div>{escape(c['capability'])}</div><ul>{elements}</ul>"
                 f"<div class='meta'>Why needed: {escape(c['why_needed'])}</div>"
@@ -183,7 +186,8 @@ def create_app(db_path: Path) -> FastAPI:
         out.append(
             "<h2>Missing</h2><p>Anything you'd need for this paper that isn't listed above?</p>"
             "<textarea id='missing-text' rows='4'></textarea>"
-            f"<button class='vbtn' onclick=\"missing('{escape(revision_id)}')\">Save</button> "
+            f"<button class='vbtn' data-rev='{escape(revision_id, quote=True)}' "
+            "onclick='missing(this)'>Save</button> "
             "<span id='missing-saved'></span>"
         )
         title = conn.execute(
@@ -215,12 +219,14 @@ def create_app(db_path: Path) -> FastAPI:
             cur = latest.get(q.question_id)
             keys = "".join(f"<li>{escape(k)}</li>" for k in q.key_points)
             buttons = "".join(
-                f"<button class='vbtn {'on' if cur == v else ''}' "
-                f"onclick=\"review(this, '{exam_id}', '{q.question_id}', '{v}')\">{t}</button> "
-                for v, t in [("good", "Good"), ("fix", "Fix"), ("drop", "Drop")]
+                f"<button class='vbtn {'on' if cur == v else ''}' data-value='{v}' "
+                f"onclick='review(this)'>{t}</button> "
+                for v, t in VERDICTS
             )
             out.append(
-                f"<div class='req'><b>{q.question_id}</b> <span class='meta'>· {q.kind} · {q.use}"
+                f"<div class='req' data-exam='{escape(exam_id, quote=True)}' "
+                f"data-qid='{escape(q.question_id, quote=True)}'><b>{escape(q.question_id)}</b> "
+                f"<span class='meta'>· {q.kind} · {q.use}"
                 f"</span><div>{escape(q.question)}</div><ul>{keys}</ul>"
                 f"<div class='meta'>Also acceptable: {escape(q.acceptable_variants)}</div>"
                 f"<div class='btns'>{buttons}</div>"
@@ -233,6 +239,11 @@ def create_app(db_path: Path) -> FastAPI:
         if body.label not in dict(LABELS):
             raise HTTPException(400, "bad label")
         conn = db()
+        if not conn.execute(
+            "SELECT 1 FROM requirement_candidates WHERE candidate_id = ? AND system = 'gold_draft'",
+            (body.candidate_id,),
+        ).fetchone():
+            raise HTTPException(404, "no such draft requirement")
         with conn:
             conn.execute(
                 "INSERT INTO owner_labels (candidate_id, label, note) VALUES (?, ?, ?)",
@@ -243,6 +254,10 @@ def create_app(db_path: Path) -> FastAPI:
     @app.post("/api/missing")
     def post_missing(body: MissingIn):
         conn = db()
+        if not conn.execute(
+            "SELECT 1 FROM revisions WHERE revision_id = ?", (body.revision_id,)
+        ).fetchone():
+            raise HTTPException(404, "no such paper")
         with conn:
             conn.execute(
                 "INSERT INTO owner_missing (revision_id, text) VALUES (?, ?)",
@@ -252,7 +267,14 @@ def create_app(db_path: Path) -> FastAPI:
 
     @app.post("/api/exam_review")
     def post_exam_review(body: ExamReviewIn):
+        if body.verdict not in dict(VERDICTS):
+            raise HTTPException(400, "bad verdict")
         conn = db()
+        sealed = conn.execute(
+            "SELECT sealed FROM exams WHERE exam_id = ?", (body.exam_id,)
+        ).fetchone()
+        if sealed is None or sealed[0]:
+            raise HTTPException(404, "no such reviewable exam")
         with conn:
             conn.execute(
                 "INSERT INTO exam_reviews (exam_id, question_id, verdict, note) VALUES (?,?,?,?)",

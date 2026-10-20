@@ -77,9 +77,10 @@ def render(r: Req, prefix: str) -> str:
 
 def judge(
     client: Client, gold: list[Req], predicted: list[Req], subject: str
-) -> dict[str, list[Link]]:
-    """Map gold ID -> links, with predicted IDs translated back to the caller's IDs. Predictions
-    are shuffled and relabelled P1..Pn so the judge can't tell which system wrote them."""
+) -> tuple[dict[str, list[Link]], dict[str, str]]:
+    """(gold ID -> links, gold ID -> artifact of the call that judged it), with predicted IDs
+    translated back to the caller's IDs. Predictions are shuffled and relabelled P1..Pn so the
+    judge can't tell which system wrote them."""
     order = predicted[:]
     random.Random(subject).shuffle(order)
     alias = {f"P{i + 1}": r.rid for i, r in enumerate(order)}
@@ -88,6 +89,7 @@ def judge(
         for i, r in enumerate(order)
     )
     out: dict[str, list[Link]] = {}
+    judged_by: dict[str, str] = {}
     for i in range(0, len(gold), BATCH):
         batch = gold[i : i + BATCH]
         user = (
@@ -95,7 +97,7 @@ def judge(
             + "\n".join(render(g, "") for g in batch)
             + "\n</gold>"
         )
-        result, _ = client.structured(
+        result, artifact_id = client.structured(
             "match",
             client.roles.matcher,
             Judgements,
@@ -111,6 +113,7 @@ def judge(
         for j in result.judgements:
             if j.gold_id not in {g.rid for g in batch}:
                 continue
+            judged_by[j.gold_id] = artifact_id
             n_elements = len(next(g for g in batch if g.rid == j.gold_id).elements)
             out[j.gold_id] = [
                 link.model_copy(
@@ -124,7 +127,7 @@ def judge(
                 for link in j.links
                 if link.predicted in alias
             ]
-    return out
+    return out, judged_by
 
 
 def coverage(gold: Req, links: list[Link]) -> float:

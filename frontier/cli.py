@@ -97,11 +97,11 @@ def open_store(args: argparse.Namespace):
 def resolve_paper(conn, ref: str) -> str:
     """A revision ID, or the latest revision of a source ID or unique substring of one."""
     rows = conn.execute(
-        "SELECT revision_id FROM revisions WHERE revision_id = ? OR source_id = ?"
+        "SELECT revision_id, source_id FROM revisions WHERE revision_id = ? OR source_id = ?"
         " OR source_id LIKE ? ORDER BY added_at DESC",
         (ref, ref, f"%{ref}%"),
     ).fetchall()
-    sources_hit = {r[0].split("@")[0] for r in rows}
+    sources_hit = {r[1] for r in rows}
     if not rows or len(sources_hit) > 1:
         raise SystemExit(f"{ref!r} matches {len(sources_hit)} sources: {sorted(sources_hit)}")
     return rows[0][0]
@@ -123,7 +123,7 @@ def cmd_generate(args: argparse.Namespace) -> None:
         elif args.kind == "draft":
             artifact = generate.gold_draft(client, conn, revision_id)
         else:
-            artifact = generate.exam(client, conn, revision_id, sealed=args.sealed)
+            artifact = generate.exam(client, conn, revision_id, sealed=not args.reviewable)
         print(f"{revision_id}: {args.kind} -> {artifact}")
 
 
@@ -138,7 +138,9 @@ def cmd_matcher_check(args: argparse.Namespace) -> None:
 def cmd_score(args: argparse.Namespace) -> None:
     conn, client = open_store(args)
     revision_id = resolve_paper(conn, args.paper)
-    result = score.score_paper(conn, client, revision_id, args.predicted, args.gold)
+    result = score.score_paper(
+        conn, client, revision_id, args.predicted, args.gold, args.include_unlabelled
+    )
     slug = revision_id.replace(":", "-").replace("@", "-")
     path = args.report_dir / f"score-{slug}-{args.predicted}.html"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,12 +191,16 @@ def main(argv: list[str] | None = None) -> None:
     for kind, help_text in [
         ("guide", "one-shot reading guide baseline (learner-specific)"),
         ("draft", "recall-oriented requirement draft for owner labelling"),
-        ("exam", "sealed exam, written from the paper alone"),
+        ("exam", "exam written from the paper alone (sealed unless --reviewable)"),
     ]:
         p = sub.add_parser(kind, help=help_text)
         p.add_argument("papers", nargs="+", help="revision ID, source ID, or part of one")
         p.add_argument("--profile", type=Path, default=Path("profile.md"))
-        p.add_argument("--sealed", action="store_true", help="exam: never show for review")
+        p.add_argument(
+            "--reviewable",
+            action="store_true",
+            help="exam: show it on the review page (only for papers the owner has already read)",
+        )
         p.set_defaults(func=cmd_generate, kind=kind)
 
     p = sub.add_parser("matcher-check", help="run the matcher on its challenge set")
@@ -205,6 +211,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("paper")
     p.add_argument("--predicted", default="guide")
     p.add_argument("--gold", default="gold_draft")
+    p.add_argument("--include-unlabelled", action="store_true")
     p.set_defaults(func=cmd_score)
 
     p = sub.add_parser("canary", help="generate canary papers with planted traps")

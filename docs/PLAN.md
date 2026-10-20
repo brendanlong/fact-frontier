@@ -516,8 +516,8 @@ provisional smoke tests, reported with uncertainty.
   - the one-shot reading-guide baseline, plus a normalizer that turns the guide into
     requirement records so both systems are scored the same way;
   - the exam generator.
-- Owner: label model-drafted requirements for the three acceptance papers, and validate the
-  sealed exam for Paulo et al.
+- Owner: label model-drafted requirements for the three acceptance papers, and review the
+  exam for Paulo et al. (a paper he has read, so its exam is reviewable rather than sealed).
 - Decision: the gold, the guide baseline and the canaries can be scored from saved artifacts,
   and every match is inspectable.
 - **Fallback:** if the matcher can't be validated, score by owner review of the match tables

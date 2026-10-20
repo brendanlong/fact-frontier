@@ -11,12 +11,13 @@ import json
 import os
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from openai import OpenAI
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from frontier import store
 from frontier.llm import strict_schema
@@ -32,7 +33,8 @@ class Roles:
     guide: str = "anthropic/claude-opus-5.5"
     gold_draft: str = "openai/gpt-6.1-sol"
     exam: str = "openai/gpt-6.1-sol"
-    matcher: str = "anthropic/claude-opus-5.5"
+    # Different family from the guide it judges, to avoid self-preference.
+    matcher: str = "openai/gpt-6.1-sol"
     canary: str = "anthropic/claude-opus-5.5"
     embed: str = "voyageai/voyage-4"
 
@@ -68,12 +70,18 @@ class Client:
         subject: str | None = None,
         effort: Effort = "medium",
         max_tokens: int = 64000,
+        validate: Callable[[T], None] | None = None,
     ) -> tuple[T, str]:
         """Returns the parsed result and its artifact ID. Raises CallFailed (after recording
-        the artifact) on API errors, truncation, or output that doesn't match the schema."""
+        the artifact) on API errors, truncation, output that doesn't match the schema, or output
+        that `validate` rejects (recorded as `rejected`)."""
         artifact_id = f"{stage}-{uuid.uuid4().hex[:12]}"
         json_schema = strict_schema(schema)
-        params = {"effort": effort, "max_tokens": max_tokens}
+        params = {
+            "effort": effort,
+            "max_tokens": max_tokens,
+            "input_sha": hashlib.sha256(user.encode()).hexdigest()[:16],
+        }
         prompt_hash = hashlib.sha256(
             json.dumps([system, json_schema], sort_keys=True).encode()
         ).hexdigest()[:16]
@@ -111,9 +119,15 @@ class Client:
             if choice.finish_reason == "length":
                 raise ValueError("output hit max_tokens")
             parsed = schema.model_validate_json(choice.message.content or "")
-        except (ValueError, ValidationError, Exception) as e:
+        except BaseException as e:
             self._save(record, resp, "failed", repr(e), time.monotonic() - start, prompt_hash)
             raise CallFailed(artifact_id, f"{stage} call failed: {e}") from e
+        if validate:
+            try:
+                validate(parsed)
+            except ValueError as e:
+                self._save(record, resp, "rejected", repr(e), time.monotonic() - start, prompt_hash)
+                raise CallFailed(artifact_id, f"{stage} output rejected: {e}") from e
         self._save(record, resp, "ok", None, time.monotonic() - start, prompt_hash)
         return parsed, artifact_id
 

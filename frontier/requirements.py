@@ -60,6 +60,13 @@ measured, what a threshold means, what a baseline is) when understanding the res
 them; they are requirements too."""
 
 
+def check_spans(cited: list[str], valid: set[str], max_invalid: float = 0.2) -> None:
+    """Reject output whose citations mostly don't exist: it isn't about this document."""
+    invalid = [s for s in cited if s not in valid]
+    if cited and len(invalid) > max_invalid * len(cited):
+        raise ValueError(f"{len(invalid)}/{len(cited)} cited spans don't exist: {invalid[:10]}")
+
+
 def store_candidates(
     conn: sqlite3.Connection,
     revision_id: str,
@@ -70,10 +77,7 @@ def store_candidates(
 ) -> list[str]:
     """Insert requirements, dropping span IDs that don't exist in the revision. Raises if most
     citations are invalid, since that means the output isn't about this document."""
-    cited = [s for r in reqs for s in r.served_span_ids]
-    invalid = [s for s in cited if s not in valid_spans]
-    if cited and len(invalid) > 0.2 * len(cited):
-        raise ValueError(f"{len(invalid)}/{len(cited)} cited spans don't exist in {revision_id}")
+    check_spans([s for r in reqs for s in r.served_span_ids], valid_spans)
     ids = []
     with conn:
         for r in reqs:

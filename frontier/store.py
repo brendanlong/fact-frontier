@@ -137,6 +137,6 @@ def connect(path: Path) -> sqlite3.Connection:
 def migrate(conn: sqlite3.Connection) -> None:
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     for i, script in enumerate(MIGRATIONS[version:], start=version + 1):
-        with conn:
-            conn.executescript(script)
-            conn.execute(f"PRAGMA user_version = {i}")
+        # executescript commits any open transaction first, so the migration and its version
+        # bump go in one explicit transaction of their own.
+        conn.executescript(f"BEGIN IMMEDIATE; {script}; PRAGMA user_version = {i}; COMMIT;")
