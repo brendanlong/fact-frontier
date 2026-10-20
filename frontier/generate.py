@@ -4,6 +4,7 @@ another's output."""
 
 import hashlib
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Literal
@@ -54,8 +55,9 @@ GUIDE_SYSTEM = f"""\
 You write a reading guide that gets a specific learner through a specific research paper as
 efficiently as possible. Map the paper's argument, then list the prerequisites this learner
 will need, each with a short explainer, placed where the paper first needs it. Skip what the
-learner profile says they know solidly. Include what the paper assumes but doesn't explain,
-and the paper's own new concepts where understanding them takes more than reading.
+learner profile says they know solidly. List only background the paper uses but doesn't
+teach (concepts, methods, maths, conventions from outside the paper), not its own
+contributions or results, which the learner will get by reading it.
 
 {DEPTH_GUIDE}
 
@@ -99,14 +101,24 @@ class Draft(BaseModel):
 
 
 DRAFT_SYSTEM = f"""\
-List everything a reader needs to understand to follow this research paper well: to
-understand its argument, follow its method (including its derivations at the level the
-paper presents them) and judge its evidence. This list will be checked by a reader against
-what they actually know, so aim for completeness rather than brevity. Include standard
-background the paper relies on (even if most researchers know it), concepts from cited work,
-the paper's own new concepts, experimental setups and measurement conventions. Typically
-30-70 requirements. Don't pad with trivia: every item must name the claim, equation or step
-that would be misunderstood without it.
+List the background knowledge a reader needs in order to read this research paper: the
+concepts, methods, mathematics, terminology and conventions that the paper uses but does not
+itself teach, which a reader would otherwise have to look up, learn from a textbook, or learn
+from the papers it cites. The reader will read the paper for its own content, so do NOT list
+the paper's contributions, results, experiments, figures, arguments or limitations. Include a
+concept the paper introduces only if the paper uses it without explaining it enough to follow.
+
+Follow the prerequisite chain down: for each background concept, also list the more basic
+concepts needed to understand it at the depth this paper uses it, one or two levels down. For
+example, if a paper uses EK-FAC influence estimates, list influence functions, the implicit
+function theorem, the Hessian and Hessian-vector products, the Gauss-Newton and Fisher
+matrices, K-FAC and Kronecker products. The reader will mark what they already know, so it is
+fine to include foundations; what matters is that nothing they need is missing.
+
+Describe each item as the general concept, as the field uses it, so it makes sense without
+the paper; say how this paper uses it in why_needed. Typically 25-50 items. The depth is how
+deeply this paper requires it (e.g. `derive` if the paper's method can't be followed without
+working through the maths).
 
 {DEPTH_GUIDE}
 
@@ -210,6 +222,15 @@ def load_exam(conn: sqlite3.Connection, exam_id: str) -> Exam:
 
 # --- Self-test questions for blind owner labelling -----------------------------------------
 
+# The owner reads these with no paper open, so any reference to one is a defect.
+PAPER_REFERENCE = re.compile(
+    r"\b(the|this|that) (paper|authors?|essay|article|study|work|post)\b"
+    r"|\b(figure|fig\.|table|section|appendix|eq\.?|equation)\s*\(?\d"
+    r"|\b(the proposed|our|we)\b",
+    re.IGNORECASE,
+)
+ROUNDS = 3
+
 
 class SelfTest(BaseModel):
     candidate_id: str
@@ -220,33 +241,107 @@ class SelfTests(BaseModel):
     questions: list[SelfTest]
 
 
+class Standalone(BaseModel):
+    candidate_id: str
+    standalone: bool
+    missing: str = Field(description="If not standalone: what context a reader would lack.")
+
+
+class StandaloneVerdicts(BaseModel):
+    verdicts: list[Standalone]
+
+
 SELF_TEST_SYSTEM = """\
-For each requirement below (something a reader needs to understand a paper), write one short
-question a reader could try to answer in their head to check whether they understand it. The
-reader sees only your question, and decides whether they could answer it before being shown
-the requirement's details. So the question must not contain or hint at the answer: don't
-state the claim, the mechanism, the direction of an effect or any of the listed elements. Ask
-about the thing, at the stated depth ("why does...", "how would you...", "what goes wrong
-if..."), using the paper's terms only as far as needed to identify it. One sentence each.
-Return one question per candidate_id."""
+For each requirement below (background knowledge a reader needs before reading a paper), write
+one short question a reader could try to answer in their head to check whether they know it.
+The reader sees only your question: no paper, no figures, no other context. So:
+- It must make complete sense on its own. Ask about the concept as the field uses it, and
+  state any context it depends on explicitly in the question: "In EK-FAC influence
+  estimation, why is X used rather than Y?" is fine; "Why is X used rather than Y?" with the
+  setting left implicit is not. Never refer to a paper, its authors, experiments, figures,
+  sections or notation, and don't use specialised names or symbols the question doesn't
+  introduce.
+- It must not contain or hint at the answer: don't state the claim, the mechanism, the
+  direction of an effect or any of the listed elements.
+- Ask at the stated depth ("why does...", "how would you...", "what goes wrong if...").
+One sentence each. Return one question per candidate_id. If feedback on an earlier attempt is
+given, fix exactly that problem."""
+
+STANDALONE_SYSTEM = """\
+You are a knowledgeable ML researcher. You have NOT read any particular paper. Each question
+below will be shown to a reader with no other context: no paper, figures, or surrounding text.
+For each, decide whether a knowledgeable reader can tell exactly what is being asked.
+
+Context is fine when the question states it: "In EK-FAC influence estimation, why is X used
+rather than Y?" is standalone even though it is specialised. It is not standalone if it
+depends on context it leaves implicit: a specific paper, essay, experiment, dataset, figure,
+table or setup it doesn't describe; a comparison or situation it doesn't name ("why X and not
+Y?" where the setting matters but isn't given); names, acronyms or symbols that are neither
+standard in the field nor introduced in the question; or wording so vague you can't tell what
+knowledge it tests. A question is still standalone if it is hard, or if you don't know the
+answer. In `missing`, say briefly what a reader would lack."""
 
 
 def self_tests(client: Client, conn: sqlite3.Connection, revision_id: str) -> int:
+    """Write a blind self-test question for every draft requirement without one, check each
+    with a reader who sees nothing else, and rewrite failures with the reader's feedback."""
     rows = conn.execute(
         "SELECT candidate_id, label, capability, depth, required_elements FROM"
         " requirement_candidates WHERE revision_id = ? AND system = 'gold_draft'"
         " AND self_test IS NULL",
         (revision_id,),
     ).fetchall()
-    written = 0
+    pending = {r[0]: r for r in rows}
+    feedback: dict[str, str] = {}
+    latest: dict[str, str] = {}
+    for _ in range(ROUNDS):
+        if not pending:
+            break
+        questions = _write_questions(client, revision_id, list(pending.values()), feedback, latest)
+        latest |= questions
+        feedback = {}
+        for cid, q in questions.items():
+            m = PAPER_REFERENCE.search(q)
+            if m:
+                feedback[cid] = f"refers to context the reader won't have ({m.group(0)!r})"
+        to_judge = {cid: q for cid, q in questions.items() if cid not in feedback}
+        for cid, verdict in _judge_standalone(client, revision_id, to_judge).items():
+            if not verdict.standalone:
+                feedback[cid] = verdict.missing
+        passed = [cid for cid in questions if cid not in feedback]
+        with conn:
+            conn.executemany(
+                "UPDATE requirement_candidates SET self_test = ?, self_test_status = 'ok',"
+                " self_test_issue = NULL WHERE candidate_id = ?",
+                [(questions[cid], cid) for cid in passed],
+            )
+        for cid in passed:
+            del pending[cid]
+    with conn:
+        conn.executemany(
+            "UPDATE requirement_candidates SET self_test = ?, self_test_status = 'flagged',"
+            " self_test_issue = ? WHERE candidate_id = ?",
+            [(latest[cid], feedback.get(cid, ""), cid) for cid in pending],
+        )
+    return len(rows)
+
+
+def _write_questions(client, revision_id, rows, feedback, previous) -> dict[str, str]:
+    out: dict[str, str] = {}
     for i in range(0, len(rows), 20):
         batch = rows[i : i + 20]
         ids = {r[0] for r in batch}
-        user = "\n\n".join(
-            f"candidate_id: {r[0]}\nlabel: {r[1]}\ndepth: {r[3]}\ncapability: {r[2]}\n"
-            f"elements (do not reveal): {'; '.join(json.loads(r[4]))}"
-            for r in batch
-        )
+        parts = []
+        for r in batch:
+            part = (
+                f"candidate_id: {r[0]}\nlabel: {r[1]}\ndepth: {r[3]}\ncapability: {r[2]}\n"
+                f"elements (do not reveal): {'; '.join(json.loads(r[4]))}"
+            )
+            if r[0] in feedback:
+                part += (
+                    f"\nearlier attempt: {previous.get(r[0], '')}\nfeedback on it: {feedback[r[0]]}"
+                )
+            parts.append(part)
 
         def check(result: SelfTests, ids: set[str] = ids) -> None:
             got = {q.candidate_id for q in result.questions}
@@ -258,15 +353,36 @@ def self_tests(client: Client, conn: sqlite3.Connection, revision_id: str) -> in
             client.roles.self_test,
             SelfTests,
             SELF_TEST_SYSTEM,
-            user,
+            "\n\n".join(parts),
             subject=revision_id,
             effort="low",
             validate=check,
         )
-        with conn:
-            conn.executemany(
-                "UPDATE requirement_candidates SET self_test = ? WHERE candidate_id = ?",
-                [(q.question, q.candidate_id) for q in result.questions],
-            )
-        written += len(result.questions)
-    return written
+        out |= {q.candidate_id: q.question for q in result.questions}
+    return out
+
+
+def _judge_standalone(client, revision_id, questions: dict[str, str]) -> dict[str, Standalone]:
+    out: dict[str, Standalone] = {}
+    items = list(questions.items())
+    for i in range(0, len(items), 25):
+        batch = dict(items[i : i + 25])
+        batch_ids = frozenset(batch)
+
+        def check(result: StandaloneVerdicts, ids: frozenset[str] = batch_ids) -> None:
+            got = {v.candidate_id for v in result.verdicts}
+            if got != ids:
+                raise ValueError(f"expected {sorted(ids)}, got {sorted(got)}")
+
+        result, _ = client.structured(
+            "standalone_check",
+            client.roles.standalone_judge,
+            StandaloneVerdicts,
+            STANDALONE_SYSTEM,
+            "\n".join(f"{cid}: {q}" for cid, q in batch.items()),
+            subject=revision_id,
+            effort="low",
+            validate=check,
+        )
+        out |= {v.candidate_id: v for v in result.verdicts}
+    return out

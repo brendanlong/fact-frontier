@@ -37,6 +37,8 @@ class Roles:
     matcher: str = "openai/gpt-6.1-sol"
     canary: str = "anthropic/claude-opus-5.5"
     self_test: str = "anthropic/claude-sonnet-5.5"
+    # A different family from the writer, reading each question with no other context.
+    standalone_judge: str = "openai/gpt-6.1-sol"
     embed: str = "voyageai/voyage-4"
 
 

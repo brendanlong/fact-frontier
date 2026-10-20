@@ -232,6 +232,13 @@ def create_app(db_path: Path) -> FastAPI:
                 f"data-cid='{escape(c['candidate_id'], quote=True)}'>"
                 f"<span class='meta'>{c['depth']}</span>"
                 f"<div>{escape(c['self_test'] or c['capability'])}</div>"
+                + (
+                    f"<div class='meta'>⚠ This question may need context you don't have: "
+                    f"{escape(c['self_test_issue'] or '')}. If it's unclear, use Show details."
+                    "</div>"
+                    if c["self_test_status"] == "flagged"
+                    else ""
+                )
                 + note_box("candidate", c["candidate_id"], notes.get(c["candidate_id"], ""))
                 + f"<div class='btns'>{''.join(btn(v, t) for v, t in LABELS)}"
                 f"<button class='reveal'{' hidden' if seen else ''} "

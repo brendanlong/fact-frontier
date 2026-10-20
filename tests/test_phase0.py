@@ -209,3 +209,84 @@ def test_notes_save_independently_of_labels(conn, tmp_path):
     assert ">first draft</textarea>" in client.get("/label/r1").text
     bad = {"target_kind": "candidate", "target_id": "nope", "note": "x"}
     assert client.post("/api/note", json=bad).status_code == 404
+
+
+def test_paper_reference_check_catches_context_dependence():
+    from frontier.generate import PAPER_REFERENCE
+
+    for q in [
+        "What does the paper's Figure 3 show?",
+        "Why do the authors damp the Hessian?",
+        "How is the proposed method evaluated?",
+        "What does Table 2 imply about scaling?",
+    ]:
+        assert PAPER_REFERENCE.search(q), q
+    for q in [
+        "Why is damping added before inverting a Hessian in influence estimation?",
+        "How does K-FAC approximate the Fisher matrix with Kronecker products?",
+    ]:
+        assert not PAPER_REFERENCE.search(q), q
+
+
+class FakeSelfTestClient:
+    """Writes a context-dependent question first, then a standalone one once given feedback;
+    the standalone reader rejects anything mentioning 'heatmap'."""
+
+    class roles:
+        self_test = "writer"
+        standalone_judge = "reader"
+
+    def __init__(self):
+        self.calls = []
+
+    def structured(self, stage, model, schema, system, user, **kw):
+        from frontier import generate
+
+        self.calls.append(stage)
+        ids = [
+            line.split(": ", 1)[1] for line in user.splitlines() if line.startswith("candidate_id")
+        ]
+        if stage == "self_test":
+            qs = []
+            for block in user.split("\n\n"):
+                cid = block.splitlines()[0].split(": ", 1)[1]
+                if "feedback on it" in block:
+                    q = "Why is KL divergence asymmetric?"
+                elif cid.endswith("x"):
+                    q = "How should the heatmap be read?"
+                else:
+                    q = "What does Figure 2 show?"
+                qs.append(generate.SelfTest(candidate_id=cid, question=q))
+            return generate.SelfTests(questions=qs), "art"
+        verdicts = [
+            generate.Standalone(
+                candidate_id=line.split(": ", 1)[0],
+                standalone="heatmap" not in line,
+                missing="which heatmap" if "heatmap" in line else "",
+            )
+            for line in user.splitlines()
+        ]
+        assert not ids
+        return generate.StandaloneVerdicts(verdicts=verdicts), "art"
+
+
+def test_self_tests_rewrite_until_standalone(conn):
+    from frontier import generate
+
+    seed_revision(conn)
+    store_candidates(conn, "r1", "gold_draft", "a1", [req(["S1"]), req(["S2"])], {"S1", "S2"})
+    with conn:
+        conn.execute(
+            "UPDATE requirement_candidates SET candidate_id = candidate_id || 'x'"
+            " WHERE rowid = (SELECT max(rowid) FROM requirement_candidates)"
+        )
+    client = FakeSelfTestClient()
+    generate.self_tests(client, conn, "r1")  # type: ignore[arg-type]
+    rows = conn.execute(
+        "SELECT self_test, self_test_status FROM requirement_candidates ORDER BY candidate_id"
+    ).fetchall()
+    assert [tuple(r) for r in rows] == [
+        ("Why is KL divergence asymmetric?", "ok"),
+        ("Why is KL divergence asymmetric?", "ok"),
+    ]
+    assert client.calls.count("self_test") == 2

@@ -620,6 +620,16 @@ domain-plugin framework.
      assumed reliable; Gemini starts only as a tie-breaker.
    - The owner can override any judgment, and every override becomes a calibration label.
 5. **Rework in place** on the existing repo.
+6. **Requirements mean background, not the paper's content** (owner feedback while labelling,
+   2026-10-19).
+   - The first requirement drafts mostly listed the paper's own results, experiments and
+     critiques, as things to be quizzed on. He doesn't want to memorize papers.
+   - Requirements are the concepts, methods, maths and conventions the paper uses but doesn't
+     teach (e.g. influence functions and what they rest on), followed one or two levels down
+     the prerequisite chain.
+   - The paper's own argument is the job of the map and guided reading (§4.4), not of the
+     requirement set or long-term review.
+   - Self-test questions must make sense without the paper.
 
 ## Appendix: the Phase 0/1a build contract
 

@@ -144,6 +144,12 @@ MIGRATIONS = [
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     """,
+    # Whether each self-test question passed the blind "makes sense with no other context"
+    # check (`ok`), or still failed after rewrites (`flagged`, with the reader's complaint).
+    """
+    ALTER TABLE requirement_candidates ADD COLUMN self_test_status TEXT;
+    ALTER TABLE requirement_candidates ADD COLUMN self_test_issue TEXT;
+    """,
 ]
 
 
