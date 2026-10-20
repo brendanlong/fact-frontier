@@ -133,6 +133,17 @@ MIGRATIONS = [
     """
     ALTER TABLE requirement_candidates ADD COLUMN self_test TEXT;
     """,
+    # Owner notes, saved as he types, independent of any label or verdict. The latest note per
+    # target is current; earlier ones are kept.
+    """
+    CREATE TABLE owner_notes (
+        note_id INTEGER PRIMARY KEY,
+        target_kind TEXT NOT NULL CHECK (target_kind IN ('candidate', 'exam_question')),
+        target_id TEXT NOT NULL,
+        note TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """,
 ]
 
 

@@ -35,10 +35,15 @@ STYLE = """
   border: 1px solid var(--grid); background: var(--surface); color: var(--ink); cursor: pointer; }
 .btns button.on, .vbtn.on { background: var(--link); color: var(--page);
   border-color: var(--link); }
-input.note, textarea { font: inherit; width: 100%; box-sizing: border-box; margin-top: .3rem;
+textarea { font: inherit; width: 100%; box-sizing: border-box; margin-top: .3rem;
   background: var(--surface); color: var(--ink); border: 1px solid var(--grid); border-radius: 6px;
   padding: .3rem; }
 details.spans { font-size: .8rem; color: var(--ink-2); }
+.hidden-details { margin-top: .5rem; padding: .5rem .7rem; background: var(--surface);
+  border-radius: 6px; }
+.saved { display: block; height: 1em; margin-top: -.1rem; text-align: right; font-size: .75rem;
+  color: var(--ink-2); }
+.btns .reveal { background: none; border-style: dashed; }
 .progress { position: sticky; top: 0; background: var(--page); padding: .4rem 0; z-index: 5; }
 </style>
 <script>
@@ -52,10 +57,20 @@ function reveal(box) {
   box.querySelector(".hidden-details").hidden = false;
   box.querySelector(".reveal").hidden = true;
 }
+const noteTimers = new Map();
+function noteChanged(t) {
+  clearTimeout(noteTimers.get(t));
+  t.nextElementSibling.textContent = "";
+  noteTimers.set(t, setTimeout(async () => {
+    await post("/api/note", {target_kind: t.dataset.kind, target_id: t.dataset.target,
+      note: t.value});
+    t.nextElementSibling.textContent = "saved";
+  }, 700));
+}
 async function label(btn) {
   const box = btn.closest(".req");
   await post("/api/label", {candidate_id: box.dataset.cid, label: btn.dataset.value,
-    note: box.querySelector("input.note").value, revealed: box.dataset.revealed === "1"});
+    revealed: box.dataset.revealed === "1"});
   box.querySelectorAll(".btns button").forEach(b => b.classList.toggle("on", b === btn));
   if (box.dataset.revealed !== "1") {
     reveal(box);
@@ -68,8 +83,7 @@ async function label(btn) {
 async function review(btn) {
   const box = btn.closest(".req");
   await post("/api/exam_review", {exam_id: box.dataset.exam, question_id: box.dataset.qid,
-    verdict: btn.dataset.value,
-    note: box.querySelector("input.note").value});
+    verdict: btn.dataset.value});
   box.querySelectorAll(".vbtn").forEach(b => b.classList.toggle("on", b === btn));
 }
 async function missing(btn) {
@@ -92,6 +106,30 @@ class LabelIn(BaseModel):
     label: str
     note: str = ""
     revealed: bool = True
+
+
+class NoteIn(BaseModel):
+    target_kind: str
+    target_id: str
+    note: str
+
+
+def note_box(kind: str, target: str, current: str) -> str:
+    return (
+        f"<textarea class='note' rows='1' data-kind='{kind}' "
+        f"data-target='{escape(target, quote=True)}' oninput='noteChanged(this)' "
+        f"placeholder='Notes (optional, saved as you type)'>{escape(current)}</textarea>"
+        "<span class='saved'></span>"
+    )
+
+
+def latest_notes(conn: sqlite3.Connection, kind: str) -> dict[str, str]:
+    return dict(
+        conn.execute(
+            "SELECT target_id, note FROM owner_notes WHERE target_kind = ? ORDER BY note_id",
+            (kind,),
+        ).fetchall()
+    )
 
 
 class MissingIn(BaseModel):
@@ -159,6 +197,7 @@ def create_app(db_path: Path) -> FastAPI:
                 "SELECT candidate_id, label FROM owner_labels ORDER BY label_id"
             ).fetchall()
         )
+        notes = latest_notes(conn, "candidate")
         spans = dict(
             conn.execute(
                 "SELECT span_id, 'p' || page || ': ' || text FROM spans WHERE revision_id = ?",
@@ -188,26 +227,24 @@ def create_app(db_path: Path) -> FastAPI:
                 )
 
             seen = 1 if cur else 0
-            hidden = "" if seen else " hidden"
             out.append(
                 f"<div class='req' data-done='{seen}' data-revealed='{seen}' "
                 f"data-cid='{escape(c['candidate_id'], quote=True)}'>"
                 f"<span class='meta'>{c['depth']}</span>"
                 f"<div>{escape(c['self_test'] or c['capability'])}</div>"
-                f"<div class='btns'>{''.join(btn(v, t) for v, t in LABELS[:3])}"
+                + note_box("candidate", c["candidate_id"], notes.get(c["candidate_id"], ""))
+                + f"<div class='btns'>{''.join(btn(v, t) for v, t in LABELS)}"
                 f"<button class='reveal'{' hidden' if seen else ''} "
                 "onclick='reveal(this.closest(\".req\"))'>Show details</button></div>"
-                f"<div class='hidden-details'{hidden}>"
-                "<p class='recheck meta' hidden>Now that you can see the answer: still right? "
-                "Click again to change it.</p>"
-                f"<div class='meta'>{escape(c['capability'])}</div>"
+                f"<div class='hidden-details'{'' if seen else ' hidden'}>"
+                "<p class='recheck meta' hidden>Now that you can see the details: still right? "
+                "Click another answer to change it.</p>"
                 f"<b>{escape(c['label'])}</b> <span class='meta'>· "
-                f"{c['centrality'].replace('_', ' ')}</span><ul>{elements}</ul>"
+                f"{c['centrality'].replace('_', ' ')}</span>"
+                f"<div class='meta'>{escape(c['capability'])}</div><ul>{elements}</ul>"
                 f"<div class='meta'>Why needed: {escape(c['why_needed'])}</div>"
                 f"<details class='spans'><summary>Where the paper uses it</summary>{span_text}"
-                f"</details><div class='btns'>{''.join(btn(v, t) for v, t in LABELS[3:])}</div>"
-                "</div>"
-                "<input class='note' placeholder='Optional note (saved with the next click)'></div>"
+                "</details></div></div>"
             )
         out.append(
             "<h2>Missing</h2><p>Anything you'd need for this paper that isn't listed above?</p>"
@@ -237,9 +274,11 @@ def create_app(db_path: Path) -> FastAPI:
                 (exam_id,),
             ).fetchall()
         )
+        notes = latest_notes(conn, "exam_question")
         out = [
             "<p>Is each question one an expert colleague would ask, with a correct and "
-            "complete key? <i>Fix</i>: right idea, wrong key or wording (say what).</p>"
+            "complete key? <i>Fix</i>: right idea, wrong key or wording (say what in the "
+            "notes).</p>"
         ]
         for q in exam.questions:
             cur = latest.get(q.question_id)
@@ -255,8 +294,12 @@ def create_app(db_path: Path) -> FastAPI:
                 f"<span class='meta'>· {q.kind} · {q.use}"
                 f"</span><div>{escape(q.question)}</div><ul>{keys}</ul>"
                 f"<div class='meta'>Also acceptable: {escape(q.acceptable_variants)}</div>"
-                f"<div class='btns'>{buttons}</div>"
-                "<input class='note' placeholder='What to fix (saved with the next click)'></div>"
+                + note_box(
+                    "exam_question",
+                    f"{exam_id}:{q.question_id}",
+                    notes.get(f"{exam_id}:{q.question_id}", ""),
+                )
+                + f"<div class='btns'>{buttons}</div></div>"
             )
         return page(f"Exam review: {exam_id}", "".join(out))
 
@@ -274,6 +317,31 @@ def create_app(db_path: Path) -> FastAPI:
             conn.execute(
                 "INSERT INTO owner_labels (candidate_id, label, note, revealed) VALUES (?,?,?,?)",
                 (body.candidate_id, body.label, body.note, int(body.revealed)),
+            )
+        return {"ok": True}
+
+    @app.post("/api/note")
+    def post_note(body: NoteIn):
+        conn = db()
+        if body.target_kind == "candidate":
+            ok = conn.execute(
+                "SELECT 1 FROM requirement_candidates WHERE candidate_id = ?"
+                " AND system = 'gold_draft'",
+                (body.target_id,),
+            ).fetchone()
+        elif body.target_kind == "exam_question":
+            exam_id = body.target_id.split(":", 1)[0]
+            ok = conn.execute(
+                "SELECT 1 FROM exams WHERE exam_id = ? AND NOT sealed", (exam_id,)
+            ).fetchone()
+        else:
+            raise HTTPException(400, "bad target kind")
+        if not ok:
+            raise HTTPException(404, "no such target")
+        with conn:
+            conn.execute(
+                "INSERT INTO owner_notes (target_kind, target_id, note) VALUES (?, ?, ?)",
+                (body.target_kind, body.target_id, body.note),
             )
         return {"ok": True}
 

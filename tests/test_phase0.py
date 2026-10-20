@@ -196,3 +196,16 @@ def test_label_page_hides_details_until_labelled_and_records_blindness(conn, tmp
         ("partly", 1),
     ]
     assert "<div class='hidden-details'>" in client.get("/label/r1").text
+
+
+def test_notes_save_independently_of_labels(conn, tmp_path):
+    seed_revision(conn)
+    store_candidates(conn, "r1", "gold_draft", "a1", [req(["S1"])], ingest.span_ids(conn, "r1"))
+    cid = conn.execute("SELECT candidate_id FROM requirement_candidates").fetchone()[0]
+    client = TestClient(create_app(tmp_path / "f.db"))
+    for text in ["first", "first draft"]:
+        body = {"target_kind": "candidate", "target_id": cid, "note": text}
+        assert client.post("/api/note", json=body).status_code == 200
+    assert ">first draft</textarea>" in client.get("/label/r1").text
+    bad = {"target_kind": "candidate", "target_id": "nope", "note": "x"}
+    assert client.post("/api/note", json=bad).status_code == 404
