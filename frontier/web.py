@@ -23,6 +23,7 @@ LABELS = [
     ("dont_know", "Don't know"),
     ("not_needed", "Not needed"),
     ("wrong", "Wrong"),
+    ("unclear", "Unclear question"),
 ]
 
 STYLE = """
@@ -208,9 +209,10 @@ def create_app(db_path: Path) -> FastAPI:
             f"<p class='progress'><span id='done'>{sum(c['candidate_id'] in latest for c in cands)}"
             f"</span>/{len(cands)} labelled. For each, try to answer it in your head first, "
             "then say whether <b>you</b> could. The details (which give the answer away) appear "
-            "after you choose, and you can change your answer then. Use <i>Show details</i> "
-            "if you can't tell what's being asked, or to mark an item <i>not needed</i> (the "
-            "paper doesn't really require it) or <i>wrong</i>.</p>"
+            "after you choose, and you can change your answer then. Use <i>Unclear question</i> "
+            "when you can't tell what's being asked (missing context, two questions in one, "
+            "confusing wording); that rates the question, not you. <i>Not needed</i>: the paper "
+            "doesn't really require this. <i>Wrong</i>: incorrect or misleading.</p>"
         ]
         for c in cands:
             cur = latest.get(c["candidate_id"])

@@ -150,6 +150,23 @@ MIGRATIONS = [
     ALTER TABLE requirement_candidates ADD COLUMN self_test_status TEXT;
     ALTER TABLE requirement_candidates ADD COLUMN self_test_issue TEXT;
     """,
+    # 'unclear': the owner couldn't tell what the self-test question was asking. It judges the
+    # question, not his knowledge, so scoring treats it as unlabelled.
+    """
+    CREATE TABLE owner_labels_new (
+        label_id INTEGER PRIMARY KEY,
+        candidate_id TEXT NOT NULL REFERENCES requirement_candidates(candidate_id),
+        label TEXT NOT NULL CHECK (label IN
+            ('know', 'partly', 'dont_know', 'not_needed', 'wrong', 'unclear')),
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        revealed INTEGER NOT NULL DEFAULT 1
+    );
+    INSERT INTO owner_labels_new (label_id, candidate_id, label, note, created_at, revealed)
+        SELECT label_id, candidate_id, label, note, created_at, revealed FROM owner_labels;
+    DROP TABLE owner_labels;
+    ALTER TABLE owner_labels_new RENAME TO owner_labels;
+    """,
 ]
 
 

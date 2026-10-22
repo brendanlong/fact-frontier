@@ -263,8 +263,34 @@ The reader sees only your question: no paper, no figures, no other context. So:
   introduce.
 - It must not contain or hint at the answer: don't state the claim, the mechanism, the
   direction of an effect or any of the listed elements.
+- Ask about the most general version of the concept that the paper needs, the way a textbook
+  or course would, not about the particular setup, experiment or roles in this paper. If the
+  requirement is a paper's experimental design, ask about the general idea behind it.
+- Ask about one concept, in plain words. Two angles on the same concept are fine ("what is X
+  computed between, and how does it limit Y?"); two unrelated questions joined by "and" are
+  not. No long setup.
 - Ask at the stated depth ("why does...", "how would you...", "what goes wrong if...").
-One sentence each. Return one question per candidate_id. If feedback on an earlier attempt is
+One sentence each.
+Examples a reader rejected, and why:
+- "Given a ranking of training examples by score, how do removing the top 10 percent, keeping
+  only the top 10 percent, and training separately on each of the ten disjoint deciles differ
+  as data selections?" A paper's experimental design dressed up as a general question.
+- "When attributing model behavior to training data, how do held-out training examples,
+  attribution query prompts, and final behavior-evaluation prompts differ?" Paper-specific
+  roles; the general concept is why evaluation data must be held out.
+- "Why does a model performing well on its narrow fine-tuning task not guarantee that its
+  behavior changes on semantically different evaluation questions?" Assumes an unstated setup.
+- "What does the rank of a weight-update matrix limit, and how does writing the update as a
+  product of two smaller matrices change the number of parameters?" Two questions in one.
+- "When several completions are sampled for the same prompt and each is scored, what does
+  subtracting the mean score do to the weights in a policy-gradient update, and what does this
+  centering alone leave out compared with a full GRPO objective?" Too many moving parts to
+  parse; ask one thing.
+Examples a reader accepted: "When fine-tuning a language model with a KL-divergence penalty,
+what is the KL computed between, and how does it limit drift from earlier behavior?";
+"When repeating training runs to measure variability, what different sources of randomness
+do the initialization seed and the data-shuffling seed control?"
+ Return one question per candidate_id. If feedback on an earlier attempt is
 given, fix exactly that problem."""
 
 STANDALONE_SYSTEM = """\
@@ -278,8 +304,32 @@ depends on context it leaves implicit: a specific paper, essay, experiment, data
 table or setup it doesn't describe; a comparison or situation it doesn't name ("why X and not
 Y?" where the setting matters but isn't given); names, acronyms or symbols that are neither
 standard in the field nor introduced in the question; or wording so vague you can't tell what
-knowledge it tests. A question is still standalone if it is hard, or if you don't know the
-answer. In `missing`, say briefly what a reader would lack."""
+knowledge it tests. Also reject: a particular study's experimental design or roles phrased as
+if general (a reader would ask "which setup?"); two unrelated questions joined together
+(two angles on one concept, like "what does X fix and how is it estimated?", are fine); and
+setups so long or tangled that a reader would have to reread to work out the question. A
+question is still standalone if it is hard, or if you don't know the answer. In `missing`,
+say briefly what is wrong.
+Examples a reader rejected, and why:
+- "Given a ranking of training examples by score, how do removing the top 10 percent, keeping
+  only the top 10 percent, and training separately on each of the ten disjoint deciles differ
+  as data selections?" A paper's experimental design dressed up as a general question.
+- "When attributing model behavior to training data, how do held-out training examples,
+  attribution query prompts, and final behavior-evaluation prompts differ?" Paper-specific
+  roles; the general concept is why evaluation data must be held out.
+- "Why does a model performing well on its narrow fine-tuning task not guarantee that its
+  behavior changes on semantically different evaluation questions?" Assumes an unstated setup.
+- "What does the rank of a weight-update matrix limit, and how does writing the update as a
+  product of two smaller matrices change the number of parameters?" Two questions in one.
+- "When several completions are sampled for the same prompt and each is scored, what does
+  subtracting the mean score do to the weights in a policy-gradient update, and what does this
+  centering alone leave out compared with a full GRPO objective?" Too many moving parts to
+  parse; ask one thing.
+Examples a reader accepted: "When fine-tuning a language model with a KL-divergence penalty,
+what is the KL computed between, and how does it limit drift from earlier behavior?";
+"When repeating training runs to measure variability, what different sources of randomness
+do the initialization seed and the data-shuffling seed control?".
+"""
 
 
 def self_tests(client: Client, conn: sqlite3.Connection, revision_id: str) -> int:

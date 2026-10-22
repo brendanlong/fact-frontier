@@ -38,7 +38,7 @@ def latest_labels(conn: sqlite3.Connection, revision_id: str) -> dict[str, str]:
     rows = conn.execute(
         "SELECT l.candidate_id, l.label FROM owner_labels l"
         " JOIN requirement_candidates c ON c.candidate_id = l.candidate_id"
-        " WHERE c.revision_id = ? ORDER BY l.label_id",
+        " WHERE c.revision_id = ? AND l.label != 'unclear' ORDER BY l.label_id",
         (revision_id,),
     )
     return dict(rows.fetchall())

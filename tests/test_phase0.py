@@ -290,3 +290,17 @@ def test_self_tests_rewrite_until_standalone(conn):
         ("Why is KL divergence asymmetric?", "ok"),
     ]
     assert client.calls.count("self_test") == 2
+
+
+def test_unclear_label_rates_the_question_not_the_owner(conn, tmp_path):
+    from frontier import score
+
+    seed_revision(conn)
+    store_candidates(conn, "r1", "gold_draft", "a1", [req(["S1"])], ingest.span_ids(conn, "r1"))
+    cid = conn.execute("SELECT candidate_id FROM requirement_candidates").fetchone()[0]
+    client = TestClient(create_app(tmp_path / "f.db"))
+    body = {"candidate_id": cid, "label": "unclear", "revealed": False}
+    assert client.post("/api/label", json=body).status_code == 200
+    assert score.latest_labels(conn, "r1") == {}
+    client.post("/api/label", json={"candidate_id": cid, "label": "partly", "revealed": True})
+    assert score.latest_labels(conn, "r1") == {cid: "partly"}
